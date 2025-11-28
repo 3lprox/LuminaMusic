@@ -403,7 +403,51 @@ function App() {
                         {user.isGuest ? "Search to add songs or paste a URL." : "Syncing your library or add new tracks."}
                     </p>
                 </div>
-            )}
+            )
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            }
         </div>
       </main>
 
