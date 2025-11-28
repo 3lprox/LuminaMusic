@@ -9,6 +9,7 @@ interface NowPlayingBarProps {
   onSeek: (seconds: number) => void;
   onVolumeChange: (vol: number) => void;
   onToggleRepeat: () => void;
+  onToggleLyrics: () => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -25,7 +26,8 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
   onPrev,
   onSeek,
   onVolumeChange,
-  onToggleRepeat
+  onToggleRepeat,
+  onToggleLyrics
 }) => {
   const { currentSong, isPlaying, progress, volume, repeatMode } = playerState;
   const [localProgress, setLocalProgress] = useState(progress);
@@ -123,7 +125,16 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#D0BCFF] rounded-full"></div>
                     )}
                 </button>
+
+                <button onClick={onToggleLyrics} className={`p-2 rounded-full hover:bg-[#E6E0E9]/10 transition-colors ${currentSong.lyrics ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
+                   <span className="material-symbols-rounded text-xl">mic</span>
+                </button>
             </div>
+            
+            {/* Mobile Lyrics Button (Only visible on small screens) */}
+            <button onClick={onToggleLyrics} className="sm:hidden text-[#CAC4D0] p-2">
+                <span className="material-symbols-rounded text-2xl">mic</span>
+            </button>
         </div>
       </div>
     </div>

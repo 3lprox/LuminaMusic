@@ -1,5 +1,11 @@
 export type SongSource = 'YOUTUBE' | 'LOCAL';
 
+export interface LyricLine {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export interface Song {
   id: string;
   source: SongSource;
@@ -19,6 +25,8 @@ export interface Song {
   mood?: string;
   colorHex?: string;
   summary?: string;
+  // Lyrics
+  lyrics?: LyricLine[];
 }
 
 export interface PlayerState {

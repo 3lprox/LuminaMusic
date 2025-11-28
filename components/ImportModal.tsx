@@ -179,4 +179,45 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport }) 
                         <textarea 
                             name="batchText" 
                             rows={5}
-                            className="w-full bg-[#141218] rounded-[8px] p-3 text-[#E6E0E9] text-sm border border-[#938F99
+                            className="w-full bg-[#141218] rounded-[8px] p-3 text-[#E6E0E9] text-sm border border-[#938F99] focus:border-[#D0BCFF] outline-none resize-none"
+                            placeholder="https://youtube.com/watch?v=...\nhttps://youtube.com/watch?v=..."
+                        />
+                     </div>
+                     <div className="flex justify-end gap-2 mt-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-[#D0BCFF] text-sm font-medium">Cancel</button>
+                        <button type="submit" disabled={isLoading} className="px-6 py-2 rounded-full bg-[#D0BCFF] text-[#381E72] text-sm font-medium disabled:opacity-50">
+                            {isLoading ? 'Import All' : 'Import Batch'}
+                        </button>
+                     </div>
+                </form>
+            )}
+
+            {activeTab === 'LOCAL' && (
+                <div className="flex flex-col items-center gap-6 py-4">
+                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-[#938F99] border-dashed rounded-[16px] cursor-pointer hover:bg-[#E6E0E9]/5 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <span className="material-symbols-rounded text-3xl text-[#D0BCFF] mb-2">audio_file</span>
+                            <p className="mb-2 text-sm text-[#CAC4D0]"><span className="font-semibold text-[#E6E0E9]">Click to upload</span> MP3</p>
+                        </div>
+                        <input type="file" accept="audio/*" multiple className="hidden" onChange={handleLocalFile} />
+                    </label>
+                    <p className="text-xs text-[#FFB4AB]">Note: Local files are not saved to cookies/storage and will disappear on refresh.</p>
+                     <div className="flex justify-end w-full">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-[#D0BCFF] text-sm font-medium">Cancel</button>
+                     </div>
+                </div>
+            )}
+        </div>
+
+        {(error || loadingMessage) && (
+            <div className="px-6 pb-4">
+                {error && <p className="text-[#FFB4AB] text-sm text-center">{error}</p>}
+                {loadingMessage && <p className="text-[#E6E0E9] text-sm text-center animate-pulse">{loadingMessage}</p>}
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ImportModal;

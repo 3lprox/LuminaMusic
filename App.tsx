@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Song, RepeatMode } from './types';
+import { Song, RepeatMode, LyricLine } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import ImportModal from './components/ImportModal';
 import NowPlayingBar from './components/NowPlayingBar';
 import SongListItem from './components/SongListItem';
+import LyricsOverlay from './components/LyricsOverlay';
 import { saveState, loadState } from './utils/storage';
 
 // Empty start as requested
@@ -18,6 +19,7 @@ function App() {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
 
   // Audio Ref for Local Files
@@ -72,13 +74,6 @@ function App() {
       audioRef.current.addEventListener('timeupdate', () => {
         if (audioRef.current) {
           setProgress(audioRef.current.currentTime);
-          // Auto update duration
-           if (currentSongIndex >= 0 && audioRef.current.duration) {
-             const d = audioRef.current.duration;
-             if (d > 0 && d !== Infinity) {
-                // We check if we need to update to avoid infinite loops, handled inside updateSongDuration
-             }
-           }
         }
       });
       audioRef.current.addEventListener('ended', () => {
@@ -90,7 +85,7 @@ function App() {
         }
       });
     }
-  }, [currentSongIndex]); // Re-bind if index changes (mostly for closures, though ref is stable)
+  }, [currentSongIndex]); // Re-bind if index changes
 
   // --- Hybrid Player Controller ---
   useEffect(() => {
@@ -134,10 +129,9 @@ function App() {
        if (isYTReady) {
          loadVideo(currentSong.videoId || '');
          // The YT hook handles play/pause via the loadVideo but we explicitly check state
-         // Note: loadVideo usually auto-plays.
        }
     }
-  }, [currentSong, isYTReady, currentSongIndex, queue]); // Dependencies for loading source
+  }, [currentSong, isYTReady, currentSongIndex, queue]);
 
   // Sync Play/Pause State specifically
   useEffect(() => {
@@ -160,6 +154,17 @@ function App() {
         newQueue[index] = { ...newQueue[index], duration };
         return newQueue;
     });
+  };
+
+  const handleLyricsImport = (lyrics: LyricLine[]) => {
+      if (!currentSong) return;
+      
+      setQueue(prev => {
+          const newQueue = [...prev];
+          const updatedSong = { ...newQueue[currentSongIndex], lyrics };
+          newQueue[currentSongIndex] = updatedSong;
+          return newQueue;
+      });
   };
 
   const handlePlaySong = (index: number) => {
@@ -302,6 +307,21 @@ function App() {
         </div>
       </main>
 
+      {/* Overlays */}
+      <LyricsOverlay 
+        isOpen={isLyricsOpen} 
+        onClose={() => setIsLyricsOpen(false)}
+        currentSong={currentSong}
+        currentTime={progress}
+        onImportLyrics={handleLyricsImport}
+      />
+
+      <ImportModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onImport={handleImport}
+      />
+
       {/* Bottom Player */}
       <NowPlayingBar 
         playerState={{
@@ -319,12 +339,7 @@ function App() {
         onSeek={handleSeek}
         onVolumeChange={setVolume}
         onToggleRepeat={handleToggleRepeat}
-      />
-
-      <ImportModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onImport={handleImport}
+        onToggleLyrics={() => setIsLyricsOpen(!isLyricsOpen)}
       />
 
     </div>

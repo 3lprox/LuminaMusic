@@ -11,6 +11,7 @@ interface PersistedState {
 export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode) => {
   try {
     // Filter out LOCAL songs because File objects/Blob URLs cannot be persisted across sessions reliably
+    // Keep YouTube songs AND their lyrics
     const persistableQueue = queue.filter(s => s.source === 'YOUTUBE');
     
     const data: PersistedState = {
