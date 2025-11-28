@@ -1,0 +1,5 @@
+{
+  "name": "Lumina Music",
+  "description": "A Material Design 3 inspired music player that lets you import YouTube links, analyzed and curated by Gemini AI.",
+  "requestFramePermissions": []
+}
