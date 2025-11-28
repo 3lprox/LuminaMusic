@@ -26,6 +26,9 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
+  
+  // Toast State
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Audio Ref for Local Files
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -45,9 +48,13 @@ function App() {
     // Sync if we have an access token
     if (loggedInUser.accessToken && !loggedInUser.isGuest) {
         setIsSyncing(true);
+        showToast("Syncing your Liked Videos...");
         const likedSongs = await fetchUserLikedVideos(loggedInUser.accessToken);
         if (likedSongs.length > 0) {
             handleImport(likedSongs);
+            showToast(`Synced ${likedSongs.length} songs!`);
+        } else {
+            showToast("No new songs to sync.");
         }
         setIsSyncing(false);
     }
@@ -56,7 +63,7 @@ function App() {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('lumina_active_user'); 
-    setQueue([]); // Optional: clear queue on logout
+    setQueue([]); 
   };
 
   // Load Persistence on Mount
@@ -77,6 +84,11 @@ function App() {
     }
   }, [queue, volume, repeatMode, hasLoadedState]);
 
+  const showToast = (msg: string) => {
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
   // --- YouTube Player Hook ---
@@ -87,7 +99,6 @@ function App() {
         if (state === 1) {
              setIsPlaying(true);
              // SELF-HEALING METADATA:
-             // If the song title is generic (Guest import), update it from the Player API now that it's loaded
              if (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0) {
                  const data = getVideoData();
                  if (data) {
@@ -108,7 +119,15 @@ function App() {
         }
       }
     },
-    onError: (e) => console.error("YT Error", e)
+    onError: (e) => {
+        console.error("YT Error", e);
+        // Common YouTube Error Codes: 100, 101, 150 = Restricted/Embed Blocked
+        if (e === 150 || e === 101) {
+            showToast("Playback Restricted: This video cannot be played in a 3rd party app.");
+        } else {
+            showToast("Error playing video.");
+        }
+    }
   });
 
   // --- Local Audio Logic ---
@@ -255,13 +274,17 @@ function App() {
   };
 
   const handleImport = (newSongs: Song[]) => {
-    // Avoid duplicates
     const existingIds = new Set(queue.map(s => s.videoId || s.id));
     const uniqueSongs = newSongs.filter(s => !existingIds.has(s.videoId || s.id));
     
-    if (uniqueSongs.length === 0) return;
+    if (uniqueSongs.length === 0) {
+        showToast("Song already in library.");
+        return;
+    }
 
     setQueue(prev => [...prev, ...uniqueSongs]);
+    showToast(`Added ${uniqueSongs.length} track${uniqueSongs.length > 1 ? 's' : ''}`);
+    
     if (queue.length === 0) {
         setCurrentSongIndex(0);
         setIsPlaying(true);
@@ -272,6 +295,7 @@ function App() {
       const modes = [RepeatMode.NONE, RepeatMode.ALL, RepeatMode.ONE];
       const nextIndex = (modes.indexOf(repeatMode) + 1) % modes.length;
       setRepeatMode(modes[nextIndex]);
+      showToast(`Repeat: ${modes[nextIndex]}`);
   };
 
   const handleRemoveSong = (e: React.MouseEvent, indexToRemove: number) => {
@@ -310,12 +334,10 @@ function App() {
     window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
   };
 
-  // If NOT authenticated, show Auth Screen
   if (!user) {
     return <AuthScreen onLogin={handleLogin} />;
   }
 
-  // Authenticated App
   const activeColor = currentSong?.colorHex || '#D0BCFF';
 
   return (
@@ -328,6 +350,16 @@ function App() {
       />
 
       <div id="youtube-player-hidden" className="absolute top-0 left-0 h-px w-px opacity-0 pointer-events-none" />
+
+      {/* Toast Notification */}
+      {toastMessage && (
+          <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className="bg-[#E6E0E9] text-[#141218] px-6 py-3 rounded-full shadow-xl font-medium text-sm flex items-center gap-2">
+                  <span className="material-symbols-rounded text-lg">info</span>
+                  {toastMessage}
+              </div>
+          </div>
+      )}
 
       {/* Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/90 backdrop-blur-md border-b border-white/5">

@@ -25,9 +25,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
   if (!isOpen) return null;
 
   // Determine which credential to use
-  // If accessToken exists (and not empty), use it. 
-  // If not, maybe use apiKey (legacy). 
-  // If neither, pass undefined to trigger Guest/Mock mode.
   const credential = user.accessToken || user.apiKey || undefined;
 
   // --- SEARCH TAB ---
@@ -35,6 +32,29 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
+    // SMART SEARCH: If user pastes a URL, auto-switch to import logic
+    const potentialVideoId = extractVideoId(searchQuery);
+    if (potentialVideoId) {
+        setIsLoading(true);
+        setLoadingMessage('Link detected! Fetching video...');
+        setError(null);
+        try {
+            const metadata = await fetchVideoMetadata(potentialVideoId, credential);
+            if (metadata) {
+                onImport([metadata]);
+                onClose();
+            } else {
+                setError("Could not load video details.");
+            }
+        } catch (err) {
+            setError("Failed to import link.");
+        } finally {
+            setIsLoading(false);
+        }
+        return;
+    }
+
+    // Normal Search
     setIsLoading(true);
     setLoadingMessage('Searching YouTube...');
     setError(null);
@@ -150,17 +170,17 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             type="text" 
-                            placeholder={user.isGuest ? "Search mock database..." : "Search YouTube..."}
+                            placeholder={user.isGuest ? "Search or Paste Link..." : "Search YouTube or Paste Link..."}
                             className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-2 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
                             autoFocus 
                         />
                         <button type="submit" disabled={isLoading} className="bg-[#D0BCFF] text-[#381E72] rounded-full px-4 py-2 font-medium hover:opacity-90">
-                            Search
+                            {isLoading ? '...' : 'Go'}
                         </button>
                      </form>
                      
                      <div className="flex flex-col gap-2 mt-2">
-                        {isLoading && <p className="text-center text-[#CAC4D0] animate-pulse">Loading...</p>}
+                        {isLoading && <p className="text-center text-[#CAC4D0] animate-pulse">{loadingMessage}</p>}
                         
                         {searchResults.map((song) => (
                             <div key={song.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#E6E0E9]/5 group">

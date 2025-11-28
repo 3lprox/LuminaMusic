@@ -4,6 +4,7 @@ export const extractVideoId = (url: string): string | null => {
   // youtu.be/ID
   // youtube.com/shorts/ID
   // youtube.com/embed/ID
+  // Handle list and other parameters by ignoring everything after the ID
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
