@@ -10,6 +10,7 @@ interface NowPlayingBarProps {
   onVolumeChange: (vol: number) => void;
   onToggleRepeat: () => void;
   onToggleLyrics: () => void;
+  onGoogleSearch: () => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -27,7 +28,8 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
   onSeek,
   onVolumeChange,
   onToggleRepeat,
-  onToggleLyrics
+  onToggleLyrics,
+  onGoogleSearch
 }) => {
   const { currentSong, isPlaying, progress, volume, repeatMode } = playerState;
   const [localProgress, setLocalProgress] = useState(progress);
@@ -119,6 +121,10 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                     />
                 </div>
 
+                <button onClick={onGoogleSearch} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#D0BCFF] transition-colors" title="Search on Google">
+                    <span className="material-symbols-rounded text-xl">travel_explore</span>
+                </button>
+
                 <button onClick={onToggleRepeat} className={`p-2 rounded-full hover:bg-[#E6E0E9]/10 ${repeatColor} transition-colors relative`}>
                     <span className="material-symbols-rounded text-xl">{repeatIcon}</span>
                     {repeatMode !== RepeatMode.NONE && (
@@ -131,10 +137,15 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 </button>
             </div>
             
-            {/* Mobile Lyrics Button (Only visible on small screens) */}
-            <button onClick={onToggleLyrics} className="sm:hidden text-[#CAC4D0] p-2">
-                <span className="material-symbols-rounded text-2xl">mic</span>
-            </button>
+            {/* Mobile Actions (Only visible on small screens) */}
+            <div className="sm:hidden flex items-center">
+                <button onClick={onGoogleSearch} className="text-[#CAC4D0] p-2" title="Search info">
+                    <span className="material-symbols-rounded text-2xl">travel_explore</span>
+                </button>
+                <button onClick={onToggleLyrics} className="text-[#CAC4D0] p-2">
+                    <span className="material-symbols-rounded text-2xl">mic</span>
+                </button>
+            </div>
         </div>
       </div>
     </div>

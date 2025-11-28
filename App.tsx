@@ -303,6 +303,12 @@ function App() {
           }
       }
   };
+  
+  const handleGoogleSearch = () => {
+    if (!currentSong) return;
+    const query = `${currentSong.title} ${currentSong.artist} lyrics`;
+    window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
+  };
 
   // If NOT authenticated, show Auth Screen
   if (!user) {
@@ -403,51 +409,7 @@ function App() {
                         {user.isGuest ? "Search to add songs or paste a URL." : "Syncing your library or add new tracks."}
                     </p>
                 </div>
-            )
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            }
+            )}
         </div>
       </main>
 
@@ -475,6 +437,7 @@ function App() {
         onVolumeChange={setVolume}
         onToggleRepeat={handleToggleRepeat}
         onToggleLyrics={() => setIsLyricsOpen(!isLyricsOpen)}
+        onGoogleSearch={handleGoogleSearch}
       />
     </div>
   );
