@@ -1,7 +1,19 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Lazy initialization to prevent app crash on load if env vars are missing
+let aiClient: GoogleGenAI | null = null;
+
+const getAiClient = () => {
+  if (!aiClient) {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      console.warn("API_KEY is missing. AI features will be disabled.");
+      return null;
+    }
+    aiClient = new GoogleGenAI({ apiKey });
+  }
+  return aiClient;
+};
 
 const modelId = "gemini-2.5-flash";
 
@@ -17,7 +29,19 @@ export interface SongAnalysis {
  * Analyzes a YouTube video title/info to extract clean metadata and "vibe" details.
  */
 export const analyzeSongMetadata = async (rawTitle: string): Promise<SongAnalysis> => {
+  // Fallback defaults
+  const fallback: SongAnalysis = {
+    title: rawTitle,
+    artist: "Unknown Artist",
+    mood: "Unknown",
+    colorHex: "#D0BCFF",
+    summary: "Imported from YouTube",
+  };
+
   try {
+    const ai = getAiClient();
+    if (!ai) return fallback;
+
     const prompt = `
       Analyze this YouTube video title: "${rawTitle}".
       I need you to extract the likely Song Title and Artist.
@@ -51,19 +75,11 @@ export const analyzeSongMetadata = async (rawTitle: string): Promise<SongAnalysi
       return JSON.parse(response.text) as SongAnalysis;
     }
     
-    throw new Error("Empty response from AI");
+    return fallback;
 
   } catch (error) {
-    // Prevent "cyclic structure" errors by logging only the message or a safe string representation
+    // Prevent "cyclic structure" errors by logging only the message
     console.error("Gemini analysis failed:", error instanceof Error ? error.message : String(error));
-    
-    // Fallback data
-    return {
-      title: rawTitle,
-      artist: "Unknown Artist",
-      mood: "Unknown",
-      colorHex: "#D0BCFF", // MD3 Primary default
-      summary: "Imported from YouTube",
-    };
+    return fallback;
   }
 };

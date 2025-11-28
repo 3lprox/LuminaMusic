@@ -48,8 +48,13 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport }) 
             try {
               const analysis = await analyzeSongMetadata(titleInput || "Unknown YouTube Video");
               
+              // Safe UUID generation fallback
+              const id = typeof crypto !== 'undefined' && crypto.randomUUID 
+                ? crypto.randomUUID() 
+                : Math.random().toString(36).substring(2) + Date.now().toString(36);
+
               const newSong: Song = {
-                id: crypto.randomUUID(),
+                id,
                 videoId,
                 url,
                 title: analysis.title,
