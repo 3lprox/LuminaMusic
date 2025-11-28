@@ -11,9 +11,6 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
   const [isReady, setIsReady] = useState(false);
   const intervalRef = useRef<number | null>(null);
   
-  // Use Refs to hold the latest callbacks. 
-  // This prevents "Stale Closures" where the player calls an old version of the function
-  // that doesn't know about the current song or state.
   const callbacksRef = useRef({ onStateChange, onProgress, onError });
 
   useEffect(() => {
@@ -50,7 +47,7 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     if (playerRef.current) return;
 
     playerRef.current = new window.YT.Player('youtube-player-hidden', {
-      height: '1', // Must be at least 1px for some browsers to allow playback/progress
+      height: '1', 
       width: '1',
       playerVars: {
         'playsinline': 1,
@@ -90,7 +87,7 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
         const duration = playerRef.current.getDuration();
         callbacksRef.current.onProgress(current, duration);
       }
-    }, 500); // Poll faster (500ms) for smoother UI updates
+    }, 500);
   };
 
   const stopProgressPolling = () => {
@@ -122,5 +119,13 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     if (playerRef.current && isReady) playerRef.current.setVolume(volume);
   }, [isReady]);
 
-  return { loadVideo, play, pause, seekTo, setVolume, isReady };
+  // New function to retrieve real metadata from the player
+  const getVideoData = useCallback(() => {
+      if (playerRef.current && isReady && playerRef.current.getVideoData) {
+          return playerRef.current.getVideoData();
+      }
+      return null;
+  }, [isReady]);
+
+  return { loadVideo, play, pause, seekTo, setVolume, getVideoData, isReady };
 };

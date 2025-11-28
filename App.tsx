@@ -80,11 +80,21 @@ function App() {
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
   // --- YouTube Player Hook ---
-  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, isReady: isYTReady } = useYouTubePlayer({
+  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, getVideoData, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {
       // 1 = Playing, 2 = Paused, 0 = Ended
       if (currentSong?.source === 'YOUTUBE') {
-        if (state === 1) setIsPlaying(true);
+        if (state === 1) {
+             setIsPlaying(true);
+             // SELF-HEALING METADATA:
+             // If the song title is generic (Guest import), update it from the Player API now that it's loaded
+             if (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0) {
+                 const data = getVideoData();
+                 if (data) {
+                     updateSongMetadata(currentSongIndex, data.title, data.author);
+                 }
+             }
+        }
         if (state === 2) setIsPlaying(false);
         if (state === 0) handleNext(true); // Auto advance
       }
@@ -172,6 +182,15 @@ function App() {
         if (Math.abs(prev[index].duration - duration) < 1) return prev;
         const newQueue = [...prev];
         newQueue[index] = { ...newQueue[index], duration };
+        return newQueue;
+    });
+  };
+
+  const updateSongMetadata = (index: number, title: string, artist: string) => {
+    setQueue(prev => {
+        if (!prev[index]) return prev;
+        const newQueue = [...prev];
+        newQueue[index] = { ...newQueue[index], title, artist, mood: 'YouTube' };
         return newQueue;
     });
   };
@@ -381,7 +400,7 @@ function App() {
                 <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20] rounded-[28px] mt-4 border border-[#49454F]">
                     <span className="material-symbols-rounded text-6xl mb-4 opacity-50">library_music</span>
                     <p className="text-center max-w-xs mb-6">
-                        {user.isGuest ? "Search to add songs." : "Syncing your library or add new tracks."}
+                        {user.isGuest ? "Search to add songs or paste a URL." : "Syncing your library or add new tracks."}
                     </p>
                 </div>
             )}

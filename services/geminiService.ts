@@ -18,7 +18,7 @@ interface YouTubeVideoDetails {
   snippet: {
     title: string;
     channelTitle: string;
-    thumbnails: { maxres?: { url: string }, high: { url: string } };
+    thumbnails: { maxres?: { url: string }, high: { url: string }, medium?: { url: string } };
   };
 }
 
@@ -155,39 +155,89 @@ export const searchYouTube = async (query: string, tokenOrKey?: string): Promise
 };
 
 export const fetchVideoMetadata = async (videoId: string, tokenOrKey?: string): Promise<Song | null> => {
-   if (!tokenOrKey) {
-       // Check mock db first
-       const mock = MOCK_DB.find(s => s.videoId === videoId);
-       if (mock) return { ...mock, id: crypto.randomUUID() };
-       
-       // Fallback dummy
-       return {
-        id: crypto.randomUUID(),
-        source: 'YOUTUBE',
-        videoId: videoId,
-        url: `https://youtube.com/watch?v=${videoId}`,
-        title: `YouTube Video (${videoId})`,
-        artist: 'Unknown',
-        thumbnailUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
-        duration: 0,
-        addedAt: Date.now(),
-        mood: 'Unknown',
-        colorHex: '#888'
-       };
+   // 1. Check Mock DB first (Instant match)
+   const mock = MOCK_DB.find(s => s.videoId === videoId);
+   if (mock) return { ...mock, id: crypto.randomUUID() };
+
+   // 2. If User has Token/Key, use Official API
+   if (tokenOrKey) {
+       try {
+            const isBearer = tokenOrKey.length > 50;
+            const headers: any = {};
+            let detailsUrl = '';
+
+            if (isBearer) {
+                detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}`;
+                headers['Authorization'] = `Bearer ${tokenOrKey}`;
+            } else {
+                detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${tokenOrKey}`;
+            }
+
+            const res = await fetch(detailsUrl, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.items && data.items.length > 0) {
+                    const item = data.items[0];
+                    return {
+                        id: crypto.randomUUID(),
+                        source: 'YOUTUBE',
+                        videoId: videoId,
+                        url: `https://youtube.com/watch?v=${videoId}`,
+                        title: item.snippet.title,
+                        artist: item.snippet.channelTitle,
+                        thumbnailUrl: item.snippet.thumbnails.maxres?.url || item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || '',
+                        duration: parseDuration(item.contentDetails.duration),
+                        addedAt: Date.now(),
+                        mood: 'Imported',
+                        colorHex: '#D0BCFF'
+                    };
+                }
+            }
+       } catch (e) {
+           console.warn("Metadata API fetch failed", e);
+       }
    }
-   
-   // Implementation would differ for OAuth vs Key, keeping simple here or defaulting to dummy for specific fetch
+
+   // 3. Fallback: Try OEmbed (Public No-Auth method)
+   // This works for Guests to get the Title/Thumbnail without an API Key
+   try {
+       const oembedUrl = `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
+       const res = await fetch(oembedUrl);
+       if (res.ok) {
+           const data = await res.json();
+           if (data.title) {
+               return {
+                   id: crypto.randomUUID(),
+                   source: 'YOUTUBE',
+                   videoId: videoId,
+                   url: `https://youtube.com/watch?v=${videoId}`,
+                   title: data.title,
+                   artist: data.author_name || 'YouTube',
+                   thumbnailUrl: data.thumbnail_url || `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
+                   duration: 0, // OEmbed doesn't give duration, player will fix this on load
+                   addedAt: Date.now(),
+                   mood: 'Imported',
+                   colorHex: '#D0BCFF'
+               };
+           }
+       }
+   } catch (e) {
+       console.warn("OEmbed fetch failed", e);
+   }
+
+   // 4. Last Resort: Blind Import
+   // The player will auto-update the metadata when it starts playing
    return {
         id: crypto.randomUUID(),
         source: 'YOUTUBE',
         videoId: videoId,
         url: `https://youtube.com/watch?v=${videoId}`,
-        title: `YouTube Video`,
-        artist: 'Imported',
+        title: `Loading Video (${videoId})...`,
+        artist: 'YouTube',
         thumbnailUrl: `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`,
         duration: 0,
         addedAt: Date.now(),
-        mood: 'YouTube',
-        colorHex: '#D0BCFF'
-    };
+        mood: 'Unknown',
+        colorHex: '#888'
+   };
 };
