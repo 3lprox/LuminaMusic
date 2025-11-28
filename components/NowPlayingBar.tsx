@@ -56,34 +56,46 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
   const repeatColor = repeatMode !== RepeatMode.NONE ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]';
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#2B2930] text-[#E6E0E9] rounded-t-[28px] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] border-t border-white/5 pb-safe transition-transform duration-300">
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#2B2930] text-[#E6E0E9] sm:rounded-t-[28px] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] border-t border-white/5 pb-safe transition-transform duration-300">
       
-      <div className="max-w-screen-xl mx-auto px-6 py-3 flex flex-col gap-2">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-3 flex flex-col gap-2">
         
         {/* Progress Bar (Top of player) */}
-        <div className="flex items-center gap-3 w-full">
-             <span className="text-xs font-medium text-[#CAC4D0] w-8 text-right">{formatTime(localProgress)}</span>
-             <div className="relative flex-1 h-6 flex items-center group">
+        <div className="flex items-center gap-3 w-full -mt-1 sm:mt-0">
+             <span className="text-xs font-medium text-[#CAC4D0] w-8 text-right hidden sm:block">{formatTime(localProgress)}</span>
+             <div className="relative flex-1 h-8 sm:h-6 flex items-center group touch-none">
+                {/* Background Track */}
                 <div className="absolute w-full h-1 bg-[#49454F] rounded-full overflow-hidden">
                     <div className="h-full bg-[#D0BCFF] transition-all duration-100 ease-linear" style={{ width: `${(localProgress / (currentSong.duration || 1)) * 100}%` }} />
                 </div>
+                {/* Touch Area & Slider */}
                 <input 
                     type="range" min={0} max={currentSong.duration || 100} value={localProgress}
-                    onChange={handleSeekChange} onMouseDown={() => setIsDragging(true)} onMouseUp={handleSeekCommit} onTouchStart={() => setIsDragging(true)} onTouchEnd={handleSeekCommit}
+                    onChange={handleSeekChange} 
+                    onMouseDown={() => setIsDragging(true)} 
+                    onMouseUp={handleSeekCommit} 
+                    onTouchStart={() => setIsDragging(true)} 
+                    onTouchEnd={handleSeekCommit}
                     className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
                 />
             </div>
-            <span className="text-xs font-medium text-[#CAC4D0] w-8">{formatTime(currentSong.duration)}</span>
+            <span className="text-xs font-medium text-[#CAC4D0] w-8 hidden sm:block">{formatTime(currentSong.duration)}</span>
+        </div>
+        
+        {/* Mobile Time Indicator (Below progress bar) */}
+        <div className="flex justify-between sm:hidden px-1 -mt-2 mb-1">
+             <span className="text-[10px] text-[#CAC4D0]">{formatTime(localProgress)}</span>
+             <span className="text-[10px] text-[#CAC4D0]">{formatTime(currentSong.duration)}</span>
         </div>
 
         {/* Main Controls Row */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-3 sm:gap-4">
             
             {/* Track Info */}
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div className="flex items-center gap-3 flex-1 min-w-0 max-w-[60%] sm:max-w-none">
                 <img 
                     src={currentSong.thumbnailUrl} alt="Album Art" 
-                    className={`h-12 w-12 rounded-[12px] object-cover bg-[#49454F] ${isPlaying ? 'animate-pulse-slow' : ''}`}
+                    className={`h-10 w-10 sm:h-12 sm:w-12 rounded-[8px] sm:rounded-[12px] object-cover bg-[#49454F] ${isPlaying ? 'animate-pulse-slow' : ''}`}
                 />
                 <div className="min-w-0 flex flex-col justify-center">
                     <h3 className="font-medium text-sm text-[#E6E0E9] truncate leading-tight">{currentSong.title}</h3>
@@ -92,20 +104,20 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
             </div>
 
             {/* Playback Controls */}
-            <div className="flex items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-1 sm:gap-4">
                 <button onClick={onPrev} className="text-[#CAC4D0] hover:text-[#E6E0E9] p-2 rounded-full hover:bg-[#E6E0E9]/10">
-                    <span className="material-symbols-rounded text-2xl">skip_previous</span>
+                    <span className="material-symbols-rounded text-2xl sm:text-2xl">skip_previous</span>
                 </button>
                 
                 <button 
                     onClick={onTogglePlay}
-                    className="h-12 w-12 rounded-[16px] bg-[#D0BCFF] text-[#381E72] flex items-center justify-center hover:shadow-lg hover:scale-105 transition-all active:scale-95"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-[12px] sm:rounded-[16px] bg-[#D0BCFF] text-[#381E72] flex items-center justify-center hover:shadow-lg hover:scale-105 transition-all active:scale-95"
                 >
-                    <span className="material-symbols-rounded text-3xl fill-1">{isPlaying ? 'pause' : 'play_arrow'}</span>
+                    <span className="material-symbols-rounded text-2xl sm:text-3xl fill-1">{isPlaying ? 'pause' : 'play_arrow'}</span>
                 </button>
 
                 <button onClick={onNext} className="text-[#CAC4D0] hover:text-[#E6E0E9] p-2 rounded-full hover:bg-[#E6E0E9]/10">
-                    <span className="material-symbols-rounded text-2xl">skip_next</span>
+                    <span className="material-symbols-rounded text-2xl sm:text-2xl">skip_next</span>
                 </button>
             </div>
 
@@ -137,12 +149,9 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 </button>
             </div>
             
-            {/* Mobile Actions (Only visible on small screens) */}
-            <div className="sm:hidden flex items-center">
-                <button onClick={onGoogleSearch} className="text-[#CAC4D0] p-2" title="Search info">
-                    <span className="material-symbols-rounded text-2xl">travel_explore</span>
-                </button>
-                <button onClick={onToggleLyrics} className="text-[#CAC4D0] p-2">
+            {/* Mobile Actions (Compact) */}
+            <div className="sm:hidden flex items-center -mr-2">
+                <button onClick={onToggleLyrics} className={`p-2 ${currentSong.lyrics ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
                     <span className="material-symbols-rounded text-2xl">mic</span>
                 </button>
             </div>

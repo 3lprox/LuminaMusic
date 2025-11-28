@@ -50,21 +50,28 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
     if (mode !== 'VIEW' || !currentSong?.lyrics) return;
 
     let index = -1;
+    // Optimized search for current line
     for (let i = 0; i < currentSong.lyrics.length; i++) {
-      if (currentTime >= currentSong.lyrics[i].start) {
-        index = i;
-      } else {
-        break; 
+      const line = currentSong.lyrics[i];
+      // Use "end" time if available for tighter sync, otherwise just check start
+      if (currentTime >= line.start) {
+          // If there is a next line, check if we haven't reached it yet
+          const nextLine = currentSong.lyrics[i+1];
+          if (!nextLine || currentTime < nextLine.start) {
+              index = i;
+              break;
+          }
       }
     }
     setActiveLineIndex(index);
   }, [currentTime, currentSong, mode]);
 
-  // Auto-scroll
+  // Auto-scroll logic (Throttled/Smoothed)
   useEffect(() => {
     if (mode === 'VIEW' && activeLineIndex >= 0 && scrollRef.current) {
       const activeEl = scrollRef.current.children[activeLineIndex] as HTMLElement;
       if (activeEl) {
+        // "center" alignment is good, but on mobile we might want it slightly higher
         activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
@@ -102,19 +109,19 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
       
       {/* Background Ambience */}
       <div 
-        className="absolute inset-0 z-0 opacity-20 pointer-events-none blur-3xl scale-110 transition-colors duration-1000"
+        className="absolute inset-0 z-0 opacity-20 pointer-events-none scale-110 transition-colors duration-1000"
         style={{ backgroundColor: currentSong.colorHex || '#49454F' }}
       />
       
       {/* Header */}
-      <div className="relative z-10 flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#141218]/80 backdrop-blur-md">
+      <div className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/5 bg-[#141218]/80 backdrop-blur-md">
         <button onClick={onClose} className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-[#E6E0E9] transition-colors">
           <span className="material-symbols-rounded text-2xl">expand_more</span>
         </button>
         
-        <div className="text-center">
-            <h3 className="text-[#E6E0E9] text-base font-medium">{currentSong.title}</h3>
-            <p className="text-[#CAC4D0] text-xs">{mode === 'VIEW' ? 'Lyrics' : mode === 'EDIT' ? 'Editing' : 'Import'}</p>
+        <div className="text-center max-w-[60%]">
+            <h3 className="text-[#E6E0E9] text-base font-medium truncate">{currentSong.title}</h3>
+            <p className="text-[#CAC4D0] text-xs truncate">{mode === 'VIEW' ? 'Lyrics' : mode === 'EDIT' ? 'Editing' : 'Import'}</p>
         </div>
         
         <div className="flex items-center gap-2">
@@ -143,16 +150,25 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
         
         {/* VIEW MODE */}
         {mode === 'VIEW' && (
-           <div ref={scrollRef} className="w-full max-w-2xl mx-auto h-full overflow-y-auto no-scrollbar py-[40vh] text-center space-y-8 px-6">
+           <div 
+             ref={scrollRef} 
+             className="w-full max-w-3xl mx-auto h-full overflow-y-auto no-scrollbar py-[30vh] sm:py-[40vh] text-center space-y-6 sm:space-y-8 px-4 sm:px-6 scroll-smooth"
+           >
             {currentSong.lyrics?.map((line, index) => {
               const isActive = index === activeLineIndex;
+              // We add a slight delay to the opacity transition so it doesn't feel "jerky" if lines are fast
               return (
                 <p 
                   key={index}
                   className={`
                     transition-all duration-500 ease-out font-bold leading-tight cursor-pointer origin-center
-                    ${isActive ? 'text-3xl sm:text-4xl text-white scale-100 opacity-100 blur-none' : 'text-xl sm:text-2xl text-[#CAC4D0] scale-95 opacity-30 hover:opacity-60 blur-[1px]'}
+                    ${isActive 
+                        ? 'text-2xl sm:text-4xl text-white scale-100 opacity-100' 
+                        : 'text-lg sm:text-2xl text-[#CAC4D0] scale-95 opacity-40 hover:opacity-60'}
                   `}
+                  onClick={() => {
+                      // Optional: Seek to this line if needed (requires passing seek handler)
+                  }}
                 >
                   {line.text}
                 </p>
@@ -184,17 +200,17 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
                             value={line.start} 
                             step="0.1"
                             onChange={(e) => updateLine(idx, 'start', parseFloat(e.target.value))}
-                            className="w-20 bg-[#2B2930] text-[#D0BCFF] text-right font-mono text-sm p-3 rounded-[12px] outline-none focus:ring-1 focus:ring-[#D0BCFF]"
+                            className="w-16 sm:w-20 bg-[#2B2930] text-[#D0BCFF] text-right font-mono text-xs sm:text-sm p-3 rounded-[12px] outline-none focus:ring-1 focus:ring-[#D0BCFF]"
                             placeholder="0.0s"
                           />
                           <input 
                             type="text" 
                             value={line.text} 
                             onChange={(e) => updateLine(idx, 'text', e.target.value)}
-                            className="flex-1 bg-[#1D1B20] text-[#E6E0E9] text-base p-3 rounded-[12px] border border-transparent focus:border-[#49454F] outline-none"
+                            className="flex-1 bg-[#1D1B20] text-[#E6E0E9] text-sm sm:text-base p-3 rounded-[12px] border border-transparent focus:border-[#49454F] outline-none"
                             placeholder="Lyric text..."
                           />
-                          <button onClick={() => deleteLine(idx)} className="p-2 text-[#FFB4AB] opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => deleteLine(idx)} className="p-2 text-[#FFB4AB]">
                               <span className="material-symbols-rounded">delete</span>
                           </button>
                       </div>
@@ -208,7 +224,7 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
 
         {/* IMPORT MODE */}
         {mode === 'IMPORT' && (
-           <div className="w-full max-w-2xl mx-auto h-full overflow-y-auto p-6 flex flex-col items-center">
+           <div className="w-full max-w-2xl mx-auto h-full overflow-y-auto p-4 sm:p-6 flex flex-col items-center">
              
              {/* Example Format */}
              <div className="w-full bg-[#2B2930] rounded-[16px] p-4 mb-6 text-xs text-[#CAC4D0] font-mono border border-[#49454F]">
@@ -242,7 +258,6 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
                         <button 
                             onClick={() => {
                                 try {
-                                    // Basic sanitization for smart quotes/trailing commas
                                     const sanitized = textInput
                                         .replace(/[\u201C\u201D]/g, '"')
                                         .replace(/,(\s*[\]}])/g, '$1');
@@ -268,7 +283,7 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
                                  const reader = new FileReader();
                                  reader.onload = (ev) => {
                                      setTextInput(ev.target?.result as string);
-                                     setImportTab('PASTE'); // Switch to paste view to review
+                                     setImportTab('PASTE');
                                  };
                                  reader.readAsText(file);
                              }

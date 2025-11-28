@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { extractVideoId } from '../utils/youtubeUtils';
-import { searchYouTube, fetchVideoMetadata } from '../services/geminiService'; // Actually youtubeService
+import { searchYouTube, fetchVideoMetadata } from '../services/geminiService';
 import { Song, User } from '../types';
 
 interface ImportModalProps {
@@ -24,7 +24,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
 
   if (!isOpen) return null;
 
-  // Determine which credential to use
   const credential = user.accessToken || user.apiKey || undefined;
 
   // --- SEARCH TAB ---
@@ -54,7 +53,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         return;
     }
 
-    // Normal Search
     setIsLoading(true);
     setLoadingMessage('Searching YouTube...');
     setError(null);
@@ -132,34 +130,27 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-[28px] bg-[#2B2930] shadow-2xl elevation-3 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[85vh]">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4">
+      <div className="w-full sm:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-[28px] sm:rounded-[28px] bg-[#2B2930] shadow-2xl elevation-3 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
         
         {/* Header */}
-        <div className="px-6 pt-6 pb-2 text-center">
+        <div className="px-6 pt-6 pb-2 text-center relative">
+            {/* Drag handle for mobile visual cue */}
+            <div className="w-12 h-1.5 bg-[#49454F] rounded-full mx-auto mb-4 sm:hidden"></div>
             <h2 className="text-2xl font-normal text-[#E6E0E9]">Add Music</h2>
         </div>
 
         {/* Tabs */}
         <div className="flex px-4 border-b border-[#49454F]">
-            <button 
-                onClick={() => setActiveTab('SEARCH')}
-                className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'SEARCH' ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
-            >
-                Search
-            </button>
-            <button 
-                onClick={() => setActiveTab('URL')}
-                className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'URL' ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
-            >
-                URL
-            </button>
-            <button 
-                onClick={() => setActiveTab('LOCAL')}
-                className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'LOCAL' ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
-            >
-                Upload
-            </button>
+            {['SEARCH', 'URL', 'LOCAL'].map((tab) => (
+                <button 
+                    key={tab}
+                    onClick={() => setActiveTab(tab as Tab)}
+                    className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
+                >
+                    {tab === 'LOCAL' ? 'Upload' : tab.charAt(0) + tab.slice(1).toLowerCase()}
+                </button>
+            ))}
         </div>
 
         <div className="p-6 flex-1 overflow-y-auto">
@@ -170,12 +161,12 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             type="text" 
-                            placeholder={user.isGuest ? "Search or Paste Link..." : "Search YouTube or Paste Link..."}
-                            className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-2 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
+                            placeholder={user.isGuest ? "Search..." : "Search YouTube..."}
+                            className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
                             autoFocus 
                         />
-                        <button type="submit" disabled={isLoading} className="bg-[#D0BCFF] text-[#381E72] rounded-full px-4 py-2 font-medium hover:opacity-90">
-                            {isLoading ? '...' : 'Go'}
+                        <button type="submit" disabled={isLoading} className="bg-[#D0BCFF] text-[#381E72] rounded-full px-5 font-medium hover:opacity-90 flex items-center justify-center">
+                            {isLoading ? <span className="material-symbols-rounded animate-spin">refresh</span> : 'Go'}
                         </button>
                      </form>
                      
@@ -183,7 +174,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                         {isLoading && <p className="text-center text-[#CAC4D0] animate-pulse">{loadingMessage}</p>}
                         
                         {searchResults.map((song) => (
-                            <div key={song.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#E6E0E9]/5 group">
+                            <div key={song.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#E6E0E9]/5 group active:bg-[#E6E0E9]/10">
                                 <img src={song.thumbnailUrl} className="w-16 h-10 object-cover rounded-md bg-[#49454F]" alt="" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-[#E6E0E9] text-sm font-medium truncate">{song.title}</p>
@@ -222,11 +213,11 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         </div>
         
         {/* Footer with Close */}
-        <div className="px-6 pb-4 flex justify-between items-center border-t border-[#49454F] pt-4">
+        <div className="px-6 pb-6 pt-4 border-t border-[#49454F] flex justify-between items-center bg-[#2B2930]">
             <span className="text-xs text-[#CAC4D0]">
-                {user.isGuest ? 'Guest Mode' : <span className="text-[#E6E0E9]">{user.username}</span>}
+                {user.isGuest ? 'Guest Mode' : <span className="text-[#E6E0E9] truncate max-w-[100px] inline-block align-bottom">{user.username}</span>}
             </span>
-            <button type="button" onClick={onClose} className="px-4 py-2 text-[#D0BCFF] text-sm font-medium">Close</button>
+            <button type="button" onClick={onClose} className="px-6 py-2 bg-[#49454F] rounded-full text-[#E6E0E9] text-sm font-medium hover:bg-[#5b5763]">Close</button>
         </div>
 
         {error && (
