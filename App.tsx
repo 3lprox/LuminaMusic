@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Song, RepeatMode, LyricLine } from './types';
+import { Song, RepeatMode, LyricLine, User } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import ImportModal from './components/ImportModal';
 import NowPlayingBar from './components/NowPlayingBar';
 import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
-import { saveState, loadState } from './utils/storage';
+import AuthScreen from './components/AuthScreen';
+import { saveState, loadState, loadUser, saveUser } from './utils/storage';
+import { fetchUserLikedVideos } from './services/geminiService'; // Actually youtubeService
 
-// Empty start as requested
 const INITIAL_QUEUE: Song[] = [];
 
 function App() {
-  // State
+  // Auth State
+  const [user, setUser] = useState<User | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // App State
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -24,6 +29,35 @@ function App() {
 
   // Audio Ref for Local Files
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Check Auth on Mount
+  useEffect(() => {
+    const savedUser = loadUser();
+    if (savedUser) {
+      setUser(savedUser);
+    }
+  }, []);
+
+  const handleLogin = async (loggedInUser: User) => {
+    setUser(loggedInUser);
+    saveUser(loggedInUser);
+
+    // Sync if we have an access token
+    if (loggedInUser.accessToken && !loggedInUser.isGuest) {
+        setIsSyncing(true);
+        const likedSongs = await fetchUserLikedVideos(loggedInUser.accessToken);
+        if (likedSongs.length > 0) {
+            handleImport(likedSongs);
+        }
+        setIsSyncing(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('lumina_active_user'); 
+    setQueue([]); // Optional: clear queue on logout
+  };
 
   // Load Persistence on Mount
   useEffect(() => {
@@ -58,7 +92,7 @@ function App() {
     onProgress: (currentTime, duration) => {
       if (currentSong?.source === 'YOUTUBE') {
         setProgress(currentTime);
-        // Update duration if needed. Check for 0 duration which is common in early load
+        // Update duration if needed
         if (duration > 0 && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
@@ -85,7 +119,7 @@ function App() {
         }
       });
     }
-  }, [currentSongIndex]); // Re-bind if index changes
+  }, [currentSongIndex]);
 
   // --- Hybrid Player Controller ---
   useEffect(() => {
@@ -99,16 +133,11 @@ function App() {
       return;
     }
 
-    // Handle Volume Global
     if (audio) audio.volume = volume / 100;
     if (isYTReady) setVolumeYT(volume);
 
-    // Source Switching
     if (currentSong.source === 'LOCAL') {
-       // Stop YT
        if (isYTReady) pauseYT();
-
-       // Load Audio if new
        if (audio && (!audio.src || !audio.src.includes(currentSong.fileUrl || ''))) {
           if (currentSong.fileUrl) {
             audio.src = currentSong.fileUrl;
@@ -116,19 +145,13 @@ function App() {
             if (isPlaying) audio.play().catch(e => console.error("Audio play failed", e));
           }
        } else if (audio) {
-          // Already loaded, just sync play state
           if (isPlaying && audio.paused) audio.play();
           if (!isPlaying && !audio.paused) audio.pause();
        }
-
     } else if (currentSong.source === 'YOUTUBE') {
-       // Stop Local
        if (audio) audio.pause();
-
-       // Load YT
        if (isYTReady) {
          loadVideo(currentSong.videoId || '');
-         // The YT hook handles play/pause via the loadVideo but we explicitly check state
        }
     }
   }, [currentSong, isYTReady, currentSongIndex, queue]);
@@ -143,9 +166,6 @@ function App() {
     }
   }, [isPlaying, currentSong, isYTReady]);
 
-
-  // --- Helper Functions ---
-
   const updateSongDuration = (index: number, duration: number) => {
     setQueue(prev => {
         if (!prev[index]) return prev;
@@ -158,7 +178,6 @@ function App() {
 
   const handleLyricsImport = (lyrics: LyricLine[]) => {
       if (!currentSong) return;
-      
       setQueue(prev => {
           const newQueue = [...prev];
           const updatedSong = { ...newQueue[currentSongIndex], lyrics };
@@ -179,9 +198,7 @@ function App() {
 
   const handleNext = useCallback((auto = false) => {
     if (queue.length === 0) return;
-    
     if (repeatMode === RepeatMode.ONE && auto) {
-      // Replay current
       if (currentSong?.source === 'YOUTUBE') seekYT(0);
       if (currentSong?.source === 'LOCAL' && audioRef.current) {
           audioRef.current.currentTime = 0;
@@ -189,26 +206,24 @@ function App() {
       }
       return;
     }
-
     if (currentSongIndex < queue.length - 1) {
         setCurrentSongIndex(prev => prev + 1);
     } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(0); // Loop back
+        setCurrentSongIndex(0);
     } else {
-        setIsPlaying(false); // Stop at end
+        setIsPlaying(false);
     }
   }, [currentSongIndex, queue.length, repeatMode, currentSong, seekYT]);
 
   const handlePrev = useCallback(() => {
     if (progress > 3) {
-        // Restart song if > 3s in
         if (currentSong?.source === 'YOUTUBE') seekYT(0);
         if (currentSong?.source === 'LOCAL' && audioRef.current) audioRef.current.currentTime = 0;
         setProgress(0);
     } else if (currentSongIndex > 0) {
         setCurrentSongIndex(prev => prev - 1);
     } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(queue.length - 1); // Loop to end
+        setCurrentSongIndex(queue.length - 1);
     }
   }, [currentSongIndex, progress, repeatMode, queue.length, currentSong, seekYT]);
 
@@ -221,9 +236,14 @@ function App() {
   };
 
   const handleImport = (newSongs: Song[]) => {
-    setQueue(prev => [...prev, ...newSongs]);
-    // If queue was empty, start playing first imported
-    if (queue.length === 0 && newSongs.length > 0) {
+    // Avoid duplicates
+    const existingIds = new Set(queue.map(s => s.videoId || s.id));
+    const uniqueSongs = newSongs.filter(s => !existingIds.has(s.videoId || s.id));
+    
+    if (uniqueSongs.length === 0) return;
+
+    setQueue(prev => [...prev, ...uniqueSongs]);
+    if (queue.length === 0) {
         setCurrentSongIndex(0);
         setIsPlaying(true);
     }
@@ -235,33 +255,19 @@ function App() {
       setRepeatMode(modes[nextIndex]);
   };
 
-  // --- Deletion Logic ---
-
   const handleRemoveSong = (e: React.MouseEvent, indexToRemove: number) => {
     e.stopPropagation();
-
-    // 1. Remove from Queue
     setQueue(prev => prev.filter((_, i) => i !== indexToRemove));
-
-    // 2. Adjust Current Song Index
     if (indexToRemove < currentSongIndex) {
-        // Song before current was removed, shift index left
         setCurrentSongIndex(prev => prev - 1);
     } else if (indexToRemove === currentSongIndex) {
-        // Current song removed
         if (queue.length === 1) {
-            // Was the only song
             setIsPlaying(false);
             setCurrentSongIndex(-1);
             setProgress(0);
         } else if (indexToRemove === queue.length - 1) {
-            // Was last song, go to previous
             setCurrentSongIndex(prev => prev - 1);
-            // Optionally stop playing if you don't want to auto-play prev
             setIsPlaying(false); 
-        } else {
-            // Was in middle, current index now points to next song
-            // React state update will trigger useEffect to play new song
         }
     }
   };
@@ -279,47 +285,65 @@ function App() {
       }
   };
 
+  // If NOT authenticated, show Auth Screen
+  if (!user) {
+    return <AuthScreen onLogin={handleLogin} />;
+  }
+
+  // Authenticated App
   const activeColor = currentSong?.colorHex || '#D0BCFF';
 
   return (
     <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
       
-      {/* Dynamic Background */}
+      {/* Background */}
       <div 
         className="fixed inset-0 pointer-events-none transition-colors duration-1000 opacity-10 z-0"
         style={{ background: `radial-gradient(circle at 50% 0%, ${activeColor}, transparent 70%)` }}
       />
 
-      {/* Hidden YouTube Player - Must have size > 0 */}
       <div id="youtube-player-hidden" className="absolute top-0 left-0 h-px w-px opacity-0 pointer-events-none" />
 
       {/* Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/90 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3 pl-2">
-            <div className="h-10 w-10 rounded-full bg-[#D0BCFF] flex items-center justify-center text-[#381E72]">
-                <span className="material-symbols-rounded text-2xl">play_circle</span>
+            <div className="h-10 w-10 rounded-full bg-[#D0BCFF] flex items-center justify-center text-[#381E72] overflow-hidden">
+                {user.picture ? (
+                    <img src={user.picture} alt="" className="w-full h-full object-cover" />
+                ) : (
+                    <span className="material-symbols-rounded text-2xl">play_circle</span>
+                )}
             </div>
             <h1 className="text-xl font-normal tracking-tight text-[#E6E0E9]">Lumina Music</h1>
         </div>
-        <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-[#49454F] overflow-hidden ml-2 flex items-center justify-center text-xs text-[#CAC4D0]">
-               AI
-            </div>
+        <div className="flex items-center gap-3">
+             <span className="text-sm text-[#CAC4D0] hidden sm:inline-block">
+                {user.isGuest ? 'Guest' : `Hi, ${user.username.split(' ')[0]}`}
+             </span>
+             <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#FFB4AB]" title="Log Out">
+                <span className="material-symbols-rounded">logout</span>
+             </button>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="relative z-10 max-w-screen-xl mx-auto px-4 pb-40 pt-6">
         
-        {/* Action Header */}
+        {/* Sync Status Banner */}
+        {isSyncing && (
+             <div className="mb-4 bg-[#2B2930] rounded-xl p-4 flex items-center gap-3 animate-pulse border border-[#D0BCFF]/30">
+                 <span className="material-symbols-rounded text-[#D0BCFF] animate-spin">sync</span>
+                 <p className="text-sm text-[#E6E0E9]">Syncing your library from YouTube...</p>
+             </div>
+        )}
+
         <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
                 <h2 className="text-[28px] leading-9 font-normal mb-1">Your Library</h2>
                 <p className="text-[#CAC4D0] text-sm tracking-wide">
-                   {queue.length} tracks • {queue.filter(s => s.source === 'LOCAL').length > 0 ? 'Local & Cloud' : 'Cloud'}
+                   {queue.length} tracks
                 </p>
             </div>
-            
             <div className="flex gap-2">
                 {queue.length > 0 && (
                     <button 
@@ -330,18 +354,16 @@ function App() {
                         <span className="text-sm font-medium">Clear All</span>
                     </button>
                 )}
-                
                 <button 
                     onClick={() => setIsModalOpen(true)}
                     className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all"
                 >
-                    <span className="material-symbols-rounded">add</span>
+                    <span className="material-symbols-rounded">search</span>
                     <span className="text-sm font-medium tracking-wide">Add Tracks</span>
                 </button>
             </div>
         </div>
 
-        {/* Playlist */}
         <div className="flex flex-col gap-1">
             {queue.map((song, index) => (
                 <SongListItem
@@ -358,14 +380,14 @@ function App() {
             {queue.length === 0 && (
                 <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20] rounded-[28px] mt-4 border border-[#49454F]">
                     <span className="material-symbols-rounded text-6xl mb-4 opacity-50">library_music</span>
-                    <p className="text-center max-w-xs mb-6">Your library is empty.</p>
-                    <button onClick={() => setIsModalOpen(true)} className="text-[#D0BCFF] hover:underline">Import from YouTube or MP3</button>
+                    <p className="text-center max-w-xs mb-6">
+                        {user.isGuest ? "Search to add songs." : "Syncing your library or add new tracks."}
+                    </p>
                 </div>
             )}
         </div>
       </main>
 
-      {/* Overlays */}
       <LyricsOverlay 
         isOpen={isLyricsOpen} 
         onClose={() => setIsLyricsOpen(false)}
@@ -378,19 +400,11 @@ function App() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onImport={handleImport}
+        user={user}
       />
 
-      {/* Bottom Player */}
       <NowPlayingBar 
-        playerState={{
-            currentSong,
-            isPlaying,
-            progress,
-            volume,
-            isMuted: volume === 0,
-            queue,
-            repeatMode
-        }}
+        playerState={{ currentSong, isPlaying, progress, volume, isMuted: volume === 0, queue, repeatMode }}
         onTogglePlay={() => setIsPlaying(!isPlaying)}
         onNext={() => handleNext(false)}
         onPrev={handlePrev}
@@ -399,7 +413,6 @@ function App() {
         onToggleRepeat={handleToggleRepeat}
         onToggleLyrics={() => setIsLyricsOpen(!isLyricsOpen)}
       />
-
     </div>
   );
 }

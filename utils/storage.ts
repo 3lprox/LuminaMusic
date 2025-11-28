@@ -1,6 +1,7 @@
-import { Song, RepeatMode } from '../types';
+import { Song, RepeatMode, User } from '../types';
 
 const STORAGE_KEY = 'lumina_music_state_v1';
+const USER_KEY = 'lumina_active_user';
 
 interface PersistedState {
   queue: Song[];
@@ -8,10 +9,23 @@ interface PersistedState {
   repeatMode: RepeatMode;
 }
 
+export const saveUser = (user: User) => {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+
+export const loadUser = (): User | null => {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode) => {
   try {
     // Filter out LOCAL songs because File objects/Blob URLs cannot be persisted across sessions reliably
-    // Keep YouTube songs AND their lyrics
     const persistableQueue = queue.filter(s => s.source === 'YOUTUBE');
     
     const data: PersistedState = {

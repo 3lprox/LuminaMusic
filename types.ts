@@ -1,5 +1,15 @@
 export type SongSource = 'YOUTUBE' | 'LOCAL';
 
+export interface User {
+  username: string;
+  email?: string;
+  picture?: string;
+  accessToken?: string; // OAuth Token
+  clientId?: string; // Stored for session
+  isGuest?: boolean;
+  apiKey?: string; // Deprecated/Optional
+}
+
 export interface LyricLine {
   start: number;
   end: number;
@@ -21,7 +31,7 @@ export interface Song {
   thumbnailUrl: string;
   duration: number; // in seconds
   addedAt: number;
-  // AI Enhanced Metadata
+  // AI Enhanced Metadata (Removed/Deprecated, kept optional for compatibility)
   mood?: string;
   colorHex?: string;
   summary?: string;
@@ -50,5 +60,6 @@ declare global {
   interface Window {
     YT: any;
     onYouTubeIframeAPIReady: () => void;
+    google: any; // GIS
   }
 }
