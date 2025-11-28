@@ -235,6 +235,50 @@ function App() {
       setRepeatMode(modes[nextIndex]);
   };
 
+  // --- Deletion Logic ---
+
+  const handleRemoveSong = (e: React.MouseEvent, indexToRemove: number) => {
+    e.stopPropagation();
+
+    // 1. Remove from Queue
+    setQueue(prev => prev.filter((_, i) => i !== indexToRemove));
+
+    // 2. Adjust Current Song Index
+    if (indexToRemove < currentSongIndex) {
+        // Song before current was removed, shift index left
+        setCurrentSongIndex(prev => prev - 1);
+    } else if (indexToRemove === currentSongIndex) {
+        // Current song removed
+        if (queue.length === 1) {
+            // Was the only song
+            setIsPlaying(false);
+            setCurrentSongIndex(-1);
+            setProgress(0);
+        } else if (indexToRemove === queue.length - 1) {
+            // Was last song, go to previous
+            setCurrentSongIndex(prev => prev - 1);
+            // Optionally stop playing if you don't want to auto-play prev
+            setIsPlaying(false); 
+        } else {
+            // Was in middle, current index now points to next song
+            // React state update will trigger useEffect to play new song
+        }
+    }
+  };
+
+  const handleClearAll = () => {
+      if (window.confirm("Are you sure you want to delete all songs from your library?")) {
+          setIsPlaying(false);
+          setCurrentSongIndex(-1);
+          setProgress(0);
+          setQueue([]);
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = "";
+          }
+      }
+  };
+
   const activeColor = currentSong?.colorHex || '#D0BCFF';
 
   return (
@@ -275,13 +319,26 @@ function App() {
                    {queue.length} tracks • {queue.filter(s => s.source === 'LOCAL').length > 0 ? 'Local & Cloud' : 'Cloud'}
                 </p>
             </div>
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-4 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all"
-            >
-                <span className="material-symbols-rounded">add</span>
-                <span className="text-sm font-medium tracking-wide">Add Tracks</span>
-            </button>
+            
+            <div className="flex gap-2">
+                {queue.length > 0 && (
+                    <button 
+                        onClick={handleClearAll}
+                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-[16px] text-[#FFB4AB] hover:bg-[#FFB4AB]/10 transition-colors"
+                    >
+                        <span className="material-symbols-rounded">delete_sweep</span>
+                        <span className="text-sm font-medium">Clear All</span>
+                    </button>
+                )}
+                
+                <button 
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all"
+                >
+                    <span className="material-symbols-rounded">add</span>
+                    <span className="text-sm font-medium tracking-wide">Add Tracks</span>
+                </button>
+            </div>
         </div>
 
         {/* Playlist */}
@@ -294,6 +351,7 @@ function App() {
                     isActive={index === currentSongIndex}
                     isPlaying={isPlaying && index === currentSongIndex}
                     onClick={() => handlePlaySong(index)}
+                    onDelete={(e) => handleRemoveSong(e, index)}
                 />
             ))}
 

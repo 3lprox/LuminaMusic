@@ -6,10 +6,11 @@ interface SongListItemProps {
   isActive: boolean;
   isPlaying: boolean;
   onClick: () => void;
+  onDelete: (e: React.MouseEvent) => void;
   index: number;
 }
 
-const SongListItem: React.FC<SongListItemProps> = ({ song, isActive, isPlaying, onClick, index }) => {
+const SongListItem: React.FC<SongListItemProps> = ({ song, isActive, isPlaying, onClick, onDelete, index }) => {
   return (
     <div 
         onClick={onClick}
@@ -52,12 +53,18 @@ const SongListItem: React.FC<SongListItemProps> = ({ song, isActive, isPlaying, 
       </div>
 
       {/* Trailing Icon */}
-      <div className="flex items-center text-[#CAC4D0]">
-         <span className="text-xs mr-4 hidden sm:block">
+      <div className="flex items-center text-[#CAC4D0] gap-4">
+         <span className="text-xs hidden sm:block">
             {song.duration ? `${Math.floor(song.duration / 60)}:${Math.floor(song.duration % 60).toString().padStart(2, '0')}` : '--:--'}
          </span>
-         <button className="p-2 rounded-full hover:bg-[#E6E0E9]/10 transition-colors">
-            <span className="material-symbols-rounded text-xl">more_vert</span>
+         
+         {/* Delete Button */}
+         <button 
+            onClick={onDelete}
+            className="p-2 rounded-full text-[#CAC4D0] hover:text-[#FFB4AB] hover:bg-[#FFB4AB]/10 transition-colors z-10"
+            title="Remove from library"
+         >
+            <span className="material-symbols-rounded text-xl">delete</span>
          </button>
       </div>
     </div>
