@@ -1,4 +1,3 @@
-export type SongSource = 'YOUTUBE' | 'LOCAL';
 
 export interface User {
   username: string;
@@ -18,24 +17,19 @@ export interface LyricLine {
 
 export interface Song {
   id: string;
-  source: SongSource;
-  // YouTube specific
-  videoId?: string;
-  // Local specific
-  fileUrl?: string; // Blob URL
-  fileObj?: File; // Raw file object (not serializable)
+  source: 'YOUTUBE'; // Fixed to YouTube
+  videoId: string;
   
-  url: string; // Display URL or origin
+  url: string;
   title: string;
   artist: string;
   thumbnailUrl: string;
   duration: number; // in seconds
   addedAt: number;
-  // AI Enhanced Metadata (Removed/Deprecated, kept optional for compatibility)
+  
   mood?: string;
   colorHex?: string;
   summary?: string;
-  // Lyrics
   lyrics?: LyricLine[];
 }
 

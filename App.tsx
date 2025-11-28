@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Song, RepeatMode, LyricLine, User } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import ImportModal from './components/ImportModal';
@@ -30,9 +31,6 @@ function App() {
   
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Audio Ref for Local Files
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Check Auth on Mount
   useEffect(() => {
@@ -92,40 +90,29 @@ function App() {
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
-  // Disable Video Mode if Local song is played
-  useEffect(() => {
-      if (currentSong?.source === 'LOCAL' && isVideoMode) {
-          setIsVideoMode(false);
-      }
-  }, [currentSong, isVideoMode]);
-
   // --- YouTube Player Hook ---
   const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, getVideoData, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {
       // 1 = Playing, 2 = Paused, 0 = Ended
-      if (currentSong?.source === 'YOUTUBE') {
-        if (state === 1) {
+      if (state === 1) {
              setIsPlaying(true);
              // SELF-HEALING METADATA:
-             if (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0) {
+             if (currentSong && (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0)) {
                  const data = getVideoData();
                  if (data) {
                      updateSongMetadata(currentSongIndex, data.title, data.author);
                  }
              }
-        }
-        if (state === 2) setIsPlaying(false);
-        if (state === 0) handleNext(true); // Auto advance
       }
+      if (state === 2) setIsPlaying(false);
+      if (state === 0) handleNext(true); // Auto advance
     },
     onProgress: (currentTime, duration) => {
-      if (currentSong?.source === 'YOUTUBE') {
         setProgress(currentTime);
         // Update duration if needed
-        if (duration > 0 && Math.abs((currentSong.duration || 0) - duration) > 1) {
+        if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
-      }
     },
     onError: (e) => {
         console.error("YT Error", e);
@@ -138,67 +125,25 @@ function App() {
     }
   });
 
-  // --- Local Audio Logic ---
+  // --- Pure YouTube Player Controller ---
   useEffect(() => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
-      audioRef.current.addEventListener('timeupdate', () => {
-        if (audioRef.current) {
-          setProgress(audioRef.current.currentTime);
-        }
-      });
-      audioRef.current.addEventListener('ended', () => {
-        handleNext(true);
-      });
-      audioRef.current.addEventListener('loadedmetadata', () => {
-        if(audioRef.current && audioRef.current.duration !== Infinity) {
-             updateSongDuration(currentSongIndex, audioRef.current.duration);
-        }
-      });
-    }
-  }, [currentSongIndex]);
-
-  // --- Hybrid Player Controller ---
-  useEffect(() => {
-    const audio = audioRef.current;
-    
     if (!currentSong) {
-      if (audio) { audio.pause(); audio.src = ''; }
       if (isYTReady) pauseYT();
       setIsPlaying(false);
       setProgress(0);
       return;
     }
 
-    if (audio) audio.volume = volume / 100;
-    if (isYTReady) setVolumeYT(volume);
-
-    if (currentSong.source === 'LOCAL') {
-       if (isYTReady) pauseYT();
-       if (audio && (!audio.src || !audio.src.includes(currentSong.fileUrl || ''))) {
-          if (currentSong.fileUrl) {
-            audio.src = currentSong.fileUrl;
-            audio.load();
-            if (isPlaying) audio.play().catch(e => console.error("Audio play failed", e));
-          }
-       } else if (audio) {
-          if (isPlaying && audio.paused) audio.play();
-          if (!isPlaying && !audio.paused) audio.pause();
-       }
-    } else if (currentSong.source === 'YOUTUBE') {
-       if (audio) audio.pause();
-       if (isYTReady) {
-         loadVideo(currentSong.videoId || '');
-       }
+    if (isYTReady) {
+       setVolumeYT(volume);
+       // Check if song changed
+       loadVideo(currentSong.videoId || '');
     }
   }, [currentSong, isYTReady, currentSongIndex, queue]);
 
   // Sync Play/Pause State specifically
   useEffect(() => {
-    const audio = audioRef.current;
-    if (currentSong?.source === 'LOCAL' && audio) {
-        isPlaying ? audio.play().catch(() => {}) : audio.pause();
-    } else if (currentSong?.source === 'YOUTUBE' && isYTReady) {
+    if (isYTReady && currentSong) {
         isPlaying ? playYT() : pauseYT();
     }
   }, [isPlaying, currentSong, isYTReady]);
@@ -245,11 +190,7 @@ function App() {
   const handleNext = useCallback((auto = false) => {
     if (queue.length === 0) return;
     if (repeatMode === RepeatMode.ONE && auto) {
-      if (currentSong?.source === 'YOUTUBE') seekYT(0);
-      if (currentSong?.source === 'LOCAL' && audioRef.current) {
-          audioRef.current.currentTime = 0;
-          audioRef.current.play();
-      }
+      seekYT(0);
       return;
     }
     if (currentSongIndex < queue.length - 1) {
@@ -259,26 +200,22 @@ function App() {
     } else {
         setIsPlaying(false);
     }
-  }, [currentSongIndex, queue.length, repeatMode, currentSong, seekYT]);
+  }, [currentSongIndex, queue.length, repeatMode, seekYT]);
 
   const handlePrev = useCallback(() => {
     if (progress > 3) {
-        if (currentSong?.source === 'YOUTUBE') seekYT(0);
-        if (currentSong?.source === 'LOCAL' && audioRef.current) audioRef.current.currentTime = 0;
+        seekYT(0);
         setProgress(0);
     } else if (currentSongIndex > 0) {
         setCurrentSongIndex(prev => prev - 1);
     } else if (repeatMode === RepeatMode.ALL) {
         setCurrentSongIndex(queue.length - 1);
     }
-  }, [currentSongIndex, progress, repeatMode, queue.length, currentSong, seekYT]);
+  }, [currentSongIndex, progress, repeatMode, queue.length, seekYT]);
 
   const handleSeek = (seconds: number) => {
     setProgress(seconds);
-    if (currentSong?.source === 'YOUTUBE') seekYT(seconds);
-    if (currentSong?.source === 'LOCAL' && audioRef.current) {
-        audioRef.current.currentTime = seconds;
-    }
+    seekYT(seconds);
   };
 
   const handleImport = (newSongs: Song[]) => {
@@ -329,10 +266,6 @@ function App() {
           setCurrentSongIndex(-1);
           setProgress(0);
           setQueue([]);
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.src = "";
-          }
       }
   };
   
@@ -359,7 +292,7 @@ function App() {
 
       {/* 
         YouTube Player Container Logic 
-        - Default (Hidden for Audio): Positioned off-screen but big enough to satisfy YouTube's checks.
+        - Default (Audio Mode): Positioned off-screen with sufficient size for playback.
         - Video Mode: Fixed inset-0, z-index high, fully opaque.
       */}
       <div 
@@ -372,15 +305,14 @@ function App() {
       >
           {/* 
              FORCE IFRAME SIZE OVERRIDE 
-             The hook sets width=1 height=1. We must use CSS !important to override this when in Video Mode.
+             The hook sets width=100% height=100%. We just need to ensure the container behaves.
           */}
           <style>{`
             #youtube-player-hidden {
                 width: 100% !important;
                 height: 100% !important;
-                max-width: ${isVideoMode ? '100%' : '1px'};
-                max-height: ${isVideoMode ? '100%' : '1px'};
-                border-radius: ${isVideoMode ? '0' : '0'};
+                max-width: 100%;
+                max-height: 100%;
             }
           `}</style>
           

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { extractVideoId } from '../utils/youtubeUtils';
 import { searchYouTube, fetchVideoMetadata } from '../services/geminiService';
@@ -10,7 +11,7 @@ interface ImportModalProps {
   user: User;
 }
 
-type Tab = 'SEARCH' | 'URL' | 'LOCAL';
+type Tab = 'SEARCH' | 'URL';
 
 const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, user }) => {
   const [activeTab, setActiveTab] = useState<Tab>('SEARCH');
@@ -104,30 +105,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
       setIsLoading(false);
     }
   };
-  
-  // --- LOCAL TAB ---
-  const handleLocalFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    const newSongs: Song[] = Array.from(files).map((file: File) => ({
-      id: crypto.randomUUID ? crypto.randomUUID() : file.name + Date.now(),
-      source: 'LOCAL',
-      fileUrl: URL.createObjectURL(file),
-      fileObj: file,
-      url: file.name,
-      title: file.name.replace(/\.[^/.]+$/, ""),
-      artist: 'Local File',
-      thumbnailUrl: 'https://cdn-icons-png.flaticon.com/512/9324/9324739.png',
-      duration: 0,
-      addedAt: Date.now(),
-      mood: 'Local',
-      colorHex: '#9ECAFF'
-    }));
-
-    onImport(newSongs);
-    onClose();
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4">
@@ -142,13 +119,13 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
 
         {/* Tabs */}
         <div className="flex px-4 border-b border-[#49454F]">
-            {['SEARCH', 'URL', 'LOCAL'].map((tab) => (
+            {['SEARCH', 'URL'].map((tab) => (
                 <button 
                     key={tab}
                     onClick={() => setActiveTab(tab as Tab)}
                     className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
                 >
-                    {tab === 'LOCAL' ? 'Upload' : tab.charAt(0) + tab.slice(1).toLowerCase()}
+                    {tab.charAt(0) + tab.slice(1).toLowerCase()}
                 </button>
             ))}
         </div>
@@ -199,16 +176,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                         {isLoading ? 'Loading...' : 'Import'}
                      </button>
                  </form>
-            )}
-
-            {activeTab === 'LOCAL' && (
-                <div className="flex flex-col items-center gap-6 py-4">
-                    <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-[#938F99] border-dashed rounded-[16px] cursor-pointer hover:bg-[#E6E0E9]/5 transition-colors">
-                        <span className="material-symbols-rounded text-3xl text-[#D0BCFF] mb-2">audio_file</span>
-                        <p className="mb-2 text-sm text-[#CAC4D0]">Click to upload MP3</p>
-                        <input type="file" accept="audio/*" multiple className="hidden" onChange={handleLocalFile} />
-                    </label>
-                </div>
             )}
         </div>
         

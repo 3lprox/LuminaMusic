@@ -1,3 +1,4 @@
+
 import { Song, RepeatMode, User } from '../types';
 
 const STORAGE_KEY = 'lumina_music_state_v1';
@@ -25,11 +26,8 @@ export const loadUser = (): User | null => {
 
 export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode) => {
   try {
-    // Filter out LOCAL songs because File objects/Blob URLs cannot be persisted across sessions reliably
-    const persistableQueue = queue.filter(s => s.source === 'YOUTUBE');
-    
     const data: PersistedState = {
-      queue: persistableQueue,
+      queue: queue, // All songs are persistable now
       volume,
       repeatMode
     };

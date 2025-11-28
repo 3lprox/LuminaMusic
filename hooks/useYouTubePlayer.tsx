@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface UseYouTubePlayerProps {
@@ -47,8 +48,8 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     if (playerRef.current) return;
 
     playerRef.current = new window.YT.Player('youtube-player-hidden', {
-      height: '1', 
-      width: '1',
+      height: '100%', 
+      width: '100%',
       playerVars: {
         'playsinline': 1,
         'controls': 0,
@@ -87,7 +88,7 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
         const duration = playerRef.current.getDuration();
         callbacksRef.current.onProgress(current, duration);
       }
-    }, 500);
+    }, 100); // 100ms for smooth lyrics
   };
 
   const stopProgressPolling = () => {
