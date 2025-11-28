@@ -58,7 +58,7 @@ function App() {
     onProgress: (currentTime, duration) => {
       if (currentSong?.source === 'YOUTUBE') {
         setProgress(currentTime);
-        // Update duration if needed
+        // Update duration if needed. Check for 0 duration which is common in early load
         if (duration > 0 && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
@@ -290,8 +290,8 @@ function App() {
         style={{ background: `radial-gradient(circle at 50% 0%, ${activeColor}, transparent 70%)` }}
       />
 
-      {/* Hidden YouTube Player */}
-      <div id="youtube-player-hidden" className="absolute top-0 left-0 h-0 w-0 opacity-0 pointer-events-none" />
+      {/* Hidden YouTube Player - Must have size > 0 */}
+      <div id="youtube-player-hidden" className="absolute top-0 left-0 h-px w-px opacity-0 pointer-events-none" />
 
       {/* Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/90 backdrop-blur-md border-b border-white/5">

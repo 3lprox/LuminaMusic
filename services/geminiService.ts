@@ -78,7 +78,6 @@ export const analyzeSongMetadata = async (rawTitle: string): Promise<SongAnalysi
     return fallback;
 
   } catch (error) {
-    // Prevent "cyclic structure" errors by logging only the message
     console.error("Gemini analysis failed:", error instanceof Error ? error.message : String(error));
     return fallback;
   }

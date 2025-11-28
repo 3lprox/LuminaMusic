@@ -10,6 +10,15 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
   const playerRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const intervalRef = useRef<number | null>(null);
+  
+  // Use Refs to hold the latest callbacks. 
+  // This prevents "Stale Closures" where the player calls an old version of the function
+  // that doesn't know about the current song or state.
+  const callbacksRef = useRef({ onStateChange, onProgress, onError });
+
+  useEffect(() => {
+    callbacksRef.current = { onStateChange, onProgress, onError };
+  }, [onStateChange, onProgress, onError]);
 
   useEffect(() => {
     // Load YouTube IFrame API
@@ -27,31 +36,32 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     }
 
     return () => {
-      if (intervalRef.current) {
-        window.clearInterval(intervalRef.current);
-      }
+      stopProgressPolling();
       if (playerRef.current) {
-        playerRef.current.destroy();
+        try {
+            playerRef.current.destroy();
+        } catch(e) { /* ignore */ }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializePlayer = () => {
-    if (playerRef.current) return; // Already initialized
+    if (playerRef.current) return;
 
     playerRef.current = new window.YT.Player('youtube-player-hidden', {
-      height: '0',
-      width: '0',
+      height: '1', // Must be at least 1px for some browsers to allow playback/progress
+      width: '1',
       playerVars: {
         'playsinline': 1,
         'controls': 0,
         'disablekb': 1,
+        'origin': window.location.origin
       },
       events: {
         'onReady': onPlayerReady,
-        'onStateChange': onPlayerStateChange,
-        'onError': onError,
+        'onStateChange': (e: any) => handleStateChange(e),
+        'onError': (e: any) => callbacksRef.current.onError(e),
       },
     });
   };
@@ -60,10 +70,10 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     setIsReady(true);
   };
 
-  const onPlayerStateChange = (event: any) => {
-    onStateChange(event.data);
+  const handleStateChange = (event: any) => {
+    callbacksRef.current.onStateChange(event.data);
     
-    // Start polling for progress if playing (state 1)
+    // 1 = Playing
     if (event.data === 1) {
       startProgressPolling();
     } else {
@@ -73,13 +83,14 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
 
   const startProgressPolling = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
+    
     intervalRef.current = window.setInterval(() => {
       if (playerRef.current && playerRef.current.getCurrentTime) {
         const current = playerRef.current.getCurrentTime();
         const duration = playerRef.current.getDuration();
-        onProgress(current, duration);
+        callbacksRef.current.onProgress(current, duration);
       }
-    }, 1000);
+    }, 500); // Poll faster (500ms) for smoother UI updates
   };
 
   const stopProgressPolling = () => {
