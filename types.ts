@@ -1,7 +1,15 @@
+export type SongSource = 'YOUTUBE' | 'LOCAL';
+
 export interface Song {
   id: string;
-  videoId: string;
-  url: string;
+  source: SongSource;
+  // YouTube specific
+  videoId?: string;
+  // Local specific
+  fileUrl?: string; // Blob URL
+  fileObj?: File; // Raw file object (not serializable)
+  
+  url: string; // Display URL or origin
   title: string;
   artist: string;
   thumbnailUrl: string;
@@ -20,12 +28,13 @@ export interface PlayerState {
   volume: number; // 0-100
   isMuted: boolean;
   queue: Song[];
+  repeatMode: RepeatMode;
 }
 
-export enum PlaybackMode {
-  NORMAL = 'NORMAL',
-  SHUFFLE = 'SHUFFLE',
-  REPEAT_ONE = 'REPEAT_ONE',
+export enum RepeatMode {
+  NONE = 'NONE',
+  ALL = 'ALL',
+  ONE = 'ONE',
 }
 
 // Global window type for YouTube IFrame API
