@@ -11,6 +11,8 @@ interface NowPlayingBarProps {
   onToggleRepeat: () => void;
   onToggleLyrics: () => void;
   onGoogleSearch: () => void;
+  onToggleVideo: () => void;
+  isVideoMode: boolean;
 }
 
 const formatTime = (seconds: number) => {
@@ -29,7 +31,9 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
   onVolumeChange,
   onToggleRepeat,
   onToggleLyrics,
-  onGoogleSearch
+  onGoogleSearch,
+  onToggleVideo,
+  isVideoMode
 }) => {
   const { currentSong, isPlaying, progress, volume, repeatMode } = playerState;
   const [localProgress, setLocalProgress] = useState(progress);
@@ -54,6 +58,8 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
 
   const repeatIcon = repeatMode === RepeatMode.ONE ? 'repeat_one' : 'repeat';
   const repeatColor = repeatMode !== RepeatMode.NONE ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]';
+
+  const isLocal = currentSong.source === 'LOCAL';
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#2B2930] text-[#E6E0E9] sm:rounded-t-[28px] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] border-t border-white/5 pb-safe transition-transform duration-300">
@@ -136,6 +142,16 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 <button onClick={onGoogleSearch} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#D0BCFF] transition-colors" title="Search on Google">
                     <span className="material-symbols-rounded text-xl">travel_explore</span>
                 </button>
+                
+                {!isLocal && (
+                    <button 
+                        onClick={onToggleVideo} 
+                        className={`p-2 rounded-full hover:bg-[#E6E0E9]/10 transition-colors ${isVideoMode ? 'text-[#D0BCFF] bg-[#D0BCFF]/10' : 'text-[#CAC4D0]'}`}
+                        title="Toggle Video Mode"
+                    >
+                        <span className="material-symbols-rounded text-xl">smart_display</span>
+                    </button>
+                )}
 
                 <button onClick={onToggleRepeat} className={`p-2 rounded-full hover:bg-[#E6E0E9]/10 ${repeatColor} transition-colors relative`}>
                     <span className="material-symbols-rounded text-xl">{repeatIcon}</span>
@@ -151,6 +167,11 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
             
             {/* Mobile Actions (Compact) */}
             <div className="sm:hidden flex items-center -mr-2">
+                {!isLocal && (
+                    <button onClick={onToggleVideo} className={`p-2 ${isVideoMode ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
+                        <span className="material-symbols-rounded text-2xl">smart_display</span>
+                    </button>
+                )}
                 <button onClick={onToggleLyrics} className={`p-2 ${currentSong.lyrics ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
                     <span className="material-symbols-rounded text-2xl">mic</span>
                 </button>

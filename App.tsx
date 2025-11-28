@@ -25,6 +25,7 @@ function App() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  const [isVideoMode, setIsVideoMode] = useState(false); // New Video Mode State
   const [hasLoadedState, setHasLoadedState] = useState(false);
   
   // Toast State
@@ -90,6 +91,13 @@ function App() {
   };
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
+
+  // Disable Video Mode if Local song is played
+  useEffect(() => {
+      if (currentSong?.source === 'LOCAL' && isVideoMode) {
+          setIsVideoMode(false);
+      }
+  }, [currentSong, isVideoMode]);
 
   // --- YouTube Player Hook ---
   const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, getVideoData, isReady: isYTReady } = useYouTubePlayer({
@@ -349,7 +357,46 @@ function App() {
         style={{ background: `radial-gradient(circle at 50% 0%, ${activeColor}, transparent 70%)` }}
       />
 
-      <div id="youtube-player-hidden" className="absolute top-0 left-0 h-px w-px opacity-0 pointer-events-none" />
+      {/* 
+        YouTube Player Container Logic 
+        - Default (Hidden for Audio): Positioned off-screen but big enough to satisfy YouTube's checks.
+        - Video Mode: Fixed inset-0, z-index high, fully opaque.
+      */}
+      <div 
+        className={`transition-all duration-300 ease-in-out
+            ${isVideoMode 
+                ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' 
+                : 'absolute left-[-9999px] top-0 w-64 h-64 opacity-0 pointer-events-none'
+            }
+        `}
+      >
+          {/* 
+             FORCE IFRAME SIZE OVERRIDE 
+             The hook sets width=1 height=1. We must use CSS !important to override this when in Video Mode.
+          */}
+          <style>{`
+            #youtube-player-hidden {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: ${isVideoMode ? '100%' : '1px'};
+                max-height: ${isVideoMode ? '100%' : '1px'};
+                border-radius: ${isVideoMode ? '0' : '0'};
+            }
+          `}</style>
+          
+          {/* The Hook mounts the iframe to this ID */}
+          <div id="youtube-player-hidden" className="w-full h-full" />
+          
+          {/* Close Button for Video Mode */}
+          {isVideoMode && (
+              <button 
+                onClick={() => setIsVideoMode(false)}
+                className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 p-3 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-colors"
+              >
+                  <span className="material-symbols-rounded text-2xl">close</span>
+              </button>
+          )}
+      </div>
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -470,6 +517,8 @@ function App() {
         onToggleRepeat={handleToggleRepeat}
         onToggleLyrics={() => setIsLyricsOpen(!isLyricsOpen)}
         onGoogleSearch={handleGoogleSearch}
+        onToggleVideo={() => setIsVideoMode(!isVideoMode)}
+        isVideoMode={isVideoMode}
       />
     </div>
   );
