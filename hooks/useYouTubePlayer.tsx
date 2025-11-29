@@ -54,7 +54,8 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
         'playsinline': 1,
         'controls': 0,
         'disablekb': 1,
-        'origin': window.location.origin
+        'origin': window.location.origin,
+        'autoplay': 1,
       },
       events: {
         'onReady': onPlayerReady,

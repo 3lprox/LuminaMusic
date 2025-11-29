@@ -292,14 +292,15 @@ function App() {
 
       {/* 
         YouTube Player Container Logic 
-        - Default (Audio Mode): Positioned off-screen with sufficient size for playback.
+        - Default (Audio Mode): Positioned "in view" but invisible (opacity 0.01, z-index -50).
+          This prevents YouTube from pausing playback due to "background/hidden" detection.
         - Video Mode: Fixed inset-0, z-index high, fully opaque.
       */}
       <div 
         className={`transition-all duration-300 ease-in-out
             ${isVideoMode 
                 ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' 
-                : 'absolute left-[-9999px] top-0 w-64 h-64 opacity-0 pointer-events-none'
+                : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-[-50] pointer-events-none'
             }
         `}
       >
