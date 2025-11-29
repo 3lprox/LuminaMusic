@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AudioQuality } from '../types';
 
@@ -146,5 +145,12 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
       return null;
   }, [isReady]);
 
-  return { loadVideo, play, pause, seekTo, setVolume, setPlaybackQuality, getVideoData, isReady };
+  const getDuration = useCallback(() => {
+      if (playerRef.current && isReady && playerRef.current.getDuration) {
+          return playerRef.current.getDuration();
+      }
+      return 0;
+  }, [isReady]);
+
+  return { loadVideo, play, pause, seekTo, setVolume, setPlaybackQuality, getVideoData, getDuration, isReady };
 };
