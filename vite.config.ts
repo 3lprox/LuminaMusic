@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     resolve: {
       alias: {
-        '@': path.resolve(process.cwd(), './'),
+        '@': path.resolve((process as any).cwd(), './'),
       },
     },
     define: {

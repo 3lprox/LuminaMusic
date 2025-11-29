@@ -80,8 +80,7 @@ const TRUENO_LYRICS: LyricLine[] = [
   { "start": 112.10, "end": 114.00, "text": "me llama para que le meta la salaman." }
 ];
 
-const MOCK_DB: Song[] = [
-  {
+export const DEFAULT_SONG: Song = {
     id: 'mock-1',
     videoId: 'LIlqmdzLHVQ',
     source: 'YOUTUBE',
@@ -94,63 +93,55 @@ const MOCK_DB: Song[] = [
     mood: 'Latin Urban',
     colorHex: '#252627',
     lyrics: TRUENO_LYRICS
-  },
-  {
-    id: 'mock-2',
-    videoId: 'jfKfPfyJRdk',
-    source: 'YOUTUBE',
-    title: 'Lo-Fi Girl Study Beats',
-    artist: 'Lofi Girl',
-    thumbnailUrl: 'https://img.youtube.com/vi/jfKfPfyJRdk/maxresdefault.jpg',
-    url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk',
-    duration: 3600,
-    addedAt: Date.now(),
-    mood: 'Chill',
-    colorHex: '#6d8a96'
-  },
-  {
-    id: 'mock-3',
-    videoId: 'K4DyBUG242c',
-    source: 'YOUTUBE',
-    title: 'Cartoon - On & On',
-    artist: 'NCS',
-    thumbnailUrl: 'https://img.youtube.com/vi/K4DyBUG242c/maxresdefault.jpg',
-    url: 'https://www.youtube.com/watch?v=K4DyBUG242c',
-    duration: 208,
-    addedAt: Date.now(),
-    mood: 'Electronic',
-    colorHex: '#E0B548'
-  },
-  {
-    id: 'mock-4',
-    videoId: '9bZkp7q19f0',
-    source: 'YOUTUBE',
-    title: 'Gangnam Style',
-    artist: 'PSY',
-    thumbnailUrl: 'https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg',
-    url: 'https://www.youtube.com/watch?v=9bZkp7q19f0',
-    duration: 252,
-    addedAt: Date.now(),
-    mood: 'K-Pop',
-    colorHex: '#30689b'
-  },
-   // Latin / Reggaeton
+};
+
+const MOCK_DB: Song[] = [
+  DEFAULT_SONG,
+  // --- TRUENO ---
+  { id: 't-1', videoId: 'Z9Yg7iF6D8A', source: 'YOUTUBE', title: 'DANCE CRIP', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('Z9Yg7iF6D8A'), url: 'https://www.youtube.com/watch?v=Z9Yg7iF6D8A', duration: 173, addedAt: Date.now(), mood: 'Hip Hop', colorHex: '#1a1a1a' },
+  { id: 't-2', videoId: 'xy11W2n_k-k', source: 'YOUTUBE', title: 'FEEL ME??', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('xy11W2n_k-k'), url: 'https://www.youtube.com/watch?v=xy11W2n_k-k', duration: 195, addedAt: Date.now(), mood: 'Hip Hop', colorHex: '#333' },
+  { id: 't-3', videoId: 'q-f75_q1yGk', source: 'YOUTUBE', title: 'MAMICHULA', artist: 'Trueno, Nicki Nicole', thumbnailUrl: getThumbnailUrl('q-f75_q1yGk'), url: 'https://www.youtube.com/watch?v=q-f75_q1yGk', duration: 219, addedAt: Date.now(), mood: 'R&B', colorHex: '#4a148c' },
+  { id: 't-4', videoId: 'J3hV4Gk8x_o', source: 'YOUTUBE', title: 'ATREVIDO', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('J3hV4Gk8x_o'), url: 'https://www.youtube.com/watch?v=J3hV4Gk8x_o', duration: 188, addedAt: Date.now(), mood: 'Trap', colorHex: '#b71c1c' },
+  { id: 't-5', videoId: '688IBAmC_nE', source: 'YOUTUBE', title: 'QLQ', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('688IBAmC_nE'), url: 'https://www.youtube.com/watch?v=688IBAmC_nE', duration: 200, addedAt: Date.now(), mood: 'Trap', colorHex: '#212121' },
+  { id: 't-6', videoId: 'gGZlXl6f1Hw', source: 'YOUTUBE', title: 'TIERRA ZANTA', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('gGZlXl6f1Hw'), url: 'https://www.youtube.com/watch?v=gGZlXl6f1Hw', duration: 245, addedAt: Date.now(), mood: 'Rap', colorHex: '#3e2723' },
+  { id: 't-7', videoId: 'L-6X0y8x_5g', source: 'YOUTUBE', title: 'ARGENTINA', artist: 'Trueno, Nathy Peluso', thumbnailUrl: getThumbnailUrl('L-6X0y8x_5g'), url: 'https://www.youtube.com/watch?v=L-6X0y8x_5g', duration: 260, addedAt: Date.now(), mood: 'Rap', colorHex: '#01579b' },
+  { id: 't-8', videoId: 'h8X-8x_5g', source: 'YOUTUBE', title: 'SOLO POR VOS', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('h8X-8x_5g'), url: 'https://www.youtube.com/watch?v=h8X-8x_5g', duration: 195, addedAt: Date.now(), mood: 'R&B', colorHex: '#880e4f' },
+  { id: 't-9', videoId: 'm9X-9x_5g', source: 'YOUTUBE', title: 'DANGEROUS', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('m9X-9x_5g'), url: 'https://www.youtube.com/watch?v=m9X-9x_5g', duration: 210, addedAt: Date.now(), mood: 'Trap', colorHex: '#000' },
+  
+  // --- DUKI ---
+  { id: 'd-1', videoId: 'f0X-0x_5g', source: 'YOUTUBE', title: 'Goteo', artist: 'Duki', thumbnailUrl: getThumbnailUrl('f0X-0x_5g'), url: 'https://www.youtube.com/watch?v=f0X-0x_5g', duration: 175, addedAt: Date.now(), mood: 'Trap', colorHex: '#ff6f00' },
+  { id: 'd-2', videoId: 'g1X-1x_5g', source: 'YOUTUBE', title: 'She Don\'t Give a FO', artist: 'Duki, Khea', thumbnailUrl: getThumbnailUrl('g1X-1x_5g'), url: 'https://www.youtube.com/watch?v=g1X-1x_5g', duration: 210, addedAt: Date.now(), mood: 'Trap', colorHex: '#d50000' },
+  { id: 'd-3', videoId: 'h2X-2x_5g', source: 'YOUTUBE', title: 'Rockstar', artist: 'Duki', thumbnailUrl: getThumbnailUrl('h2X-2x_5g'), url: 'https://www.youtube.com/watch?v=h2X-2x_5g', duration: 185, addedAt: Date.now(), mood: 'Trap', colorHex: '#1a237e' },
+  { id: 'd-4', videoId: 'i3X-3x_5g', source: 'YOUTUBE', title: 'Givenchy', artist: 'Duki', thumbnailUrl: getThumbnailUrl('i3X-3x_5g'), url: 'https://www.youtube.com/watch?v=i3X-3x_5g', duration: 205, addedAt: Date.now(), mood: 'Trap', colorHex: '#212121' },
+  { id: 'd-5', videoId: 'j4X-4x_5g', source: 'YOUTUBE', title: 'Malbec', artist: 'Duki, Bizarrap', thumbnailUrl: getThumbnailUrl('j4X-4x_5g'), url: 'https://www.youtube.com/watch?v=j4X-4x_5g', duration: 190, addedAt: Date.now(), mood: 'Trap', colorHex: '#4a148c' },
+  { id: 'd-6', videoId: 'k5X-5x_5g', source: 'YOUTUBE', title: 'Antes de Perderte', artist: 'Duki', thumbnailUrl: getThumbnailUrl('k5X-5x_5g'), url: 'https://www.youtube.com/watch?v=k5X-5x_5g', duration: 195, addedAt: Date.now(), mood: 'Reggaeton', colorHex: '#004d40' },
+  { id: 'd-7', videoId: 'l6X-6x_5g', source: 'YOUTUBE', title: 'Si Te Sentis Sola', artist: 'Duki', thumbnailUrl: getThumbnailUrl('l6X-6x_5g'), url: 'https://www.youtube.com/watch?v=l6X-6x_5g', duration: 188, addedAt: Date.now(), mood: 'Trap', colorHex: '#bf360c' },
+  { id: 'd-8', videoId: 'm7X-7x_5g', source: 'YOUTUBE', title: 'Hitboy', artist: 'Duki, Khea', thumbnailUrl: getThumbnailUrl('m7X-7x_5g'), url: 'https://www.youtube.com/watch?v=m7X-7x_5g', duration: 192, addedAt: Date.now(), mood: 'Trap', colorHex: '#311b92' },
+  { id: 'd-9', videoId: 'n8X-8x_5g', source: 'YOUTUBE', title: 'Hello Cotto', artist: 'Duki', thumbnailUrl: getThumbnailUrl('n8X-8x_5g'), url: 'https://www.youtube.com/watch?v=n8X-8x_5g', duration: 205, addedAt: Date.now(), mood: 'Trap', colorHex: '#1b5e20' },
+  { id: 'd-10', videoId: 'o9X-9x_5g', source: 'YOUTUBE', title: 'Tumbando el Club (Remix)', artist: 'Neo Pistea, Duki, YSY A', thumbnailUrl: getThumbnailUrl('o9X-9x_5g'), url: 'https://www.youtube.com/watch?v=o9X-9x_5g', duration: 280, addedAt: Date.now(), mood: 'Trap', colorHex: '#b71c1c' },
+
+  // --- YSY A ---
+  { id: 'y-1', videoId: 'p0X-0x_5g', source: 'YOUTUBE', title: 'Tamo Loco', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('p0X-0x_5g'), url: 'https://www.youtube.com/watch?v=p0X-0x_5g', duration: 165, addedAt: Date.now(), mood: 'Trap', colorHex: '#f57f17' },
+  { id: 'y-2', videoId: 'q1X-1x_5g', source: 'YOUTUBE', title: 'Casi un G', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('q1X-1x_5g'), url: 'https://www.youtube.com/watch?v=q1X-1x_5g', duration: 180, addedAt: Date.now(), mood: 'Trap', colorHex: '#4e342e' },
+  { id: 'y-3', videoId: 'r2X-2x_5g', source: 'YOUTUBE', title: 'Pastel con Nutella', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('r2X-2x_5g'), url: 'https://www.youtube.com/watch?v=r2X-2x_5g', duration: 175, addedAt: Date.now(), mood: 'Trap', colorHex: '#5d4037' },
+  { id: 'y-4', videoId: 's3X-3x_5g', source: 'YOUTUBE', title: 'Vamo a darle', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('s3X-3x_5g'), url: 'https://www.youtube.com/watch?v=s3X-3x_5g', duration: 190, addedAt: Date.now(), mood: 'Trap', colorHex: '#424242' },
+  { id: 'y-5', videoId: 't4X-4x_5g', source: 'YOUTUBE', title: 'Hidro', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('t4X-4x_5g'), url: 'https://www.youtube.com/watch?v=t4X-4x_5g', duration: 185, addedAt: Date.now(), mood: 'Trap', colorHex: '#1a1a1a' },
+  { id: 'y-6', videoId: 'u5X-5x_5g', source: 'YOUTUBE', title: 'Un Flow de Infarto', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('u5X-5x_5g'), url: 'https://www.youtube.com/watch?v=u5X-5x_5g', duration: 195, addedAt: Date.now(), mood: 'Trap', colorHex: '#ffeb3b' },
+  { id: 'y-7', videoId: 'v6X-6x_5g', source: 'YOUTUBE', title: 'Silbando', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('v6X-6x_5g'), url: 'https://www.youtube.com/watch?v=v6X-6x_5g', duration: 188, addedAt: Date.now(), mood: 'Trap', colorHex: '#0277bd' },
+  { id: 'y-8', videoId: 'w7X-7x_5g', source: 'YOUTUBE', title: 'Pintao', artist: 'YSY A, Duki, Rei', thumbnailUrl: getThumbnailUrl('w7X-7x_5g'), url: 'https://www.youtube.com/watch?v=w7X-7x_5g', duration: 210, addedAt: Date.now(), mood: 'Trap', colorHex: '#d81b60' },
+  { id: 'y-9', videoId: 'x8X-8x_5g', source: 'YOUTUBE', title: 'Full Ice', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('x8X-8x_5g'), url: 'https://www.youtube.com/watch?v=x8X-8x_5g', duration: 180, addedAt: Date.now(), mood: 'Trap', colorHex: '#80deea' },
+  { id: 'y-10', videoId: 'y9X-9x_5g', source: 'YOUTUBE', title: 'Trap de Verdad', artist: 'YSY A', thumbnailUrl: getThumbnailUrl('y9X-9x_5g'), url: 'https://www.youtube.com/watch?v=y9X-9x_5g', duration: 200, addedAt: Date.now(), mood: 'Trap', colorHex: '#ef6c00' },
+
+  // --- GENERAL POPULAR ---
+  { id: 'mock-2', videoId: 'jfKfPfyJRdk', source: 'YOUTUBE', title: 'Lo-Fi Girl Study Beats', artist: 'Lofi Girl', thumbnailUrl: 'https://img.youtube.com/vi/jfKfPfyJRdk/maxresdefault.jpg', url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', duration: 3600, addedAt: Date.now(), mood: 'Chill', colorHex: '#6d8a96' },
+  { id: 'mock-3', videoId: 'K4DyBUG242c', source: 'YOUTUBE', title: 'Cartoon - On & On', artist: 'NCS', thumbnailUrl: 'https://img.youtube.com/vi/K4DyBUG242c/maxresdefault.jpg', url: 'https://www.youtube.com/watch?v=K4DyBUG242c', duration: 208, addedAt: Date.now(), mood: 'Electronic', colorHex: '#E0B548' },
+  { id: 'mock-4', videoId: '9bZkp7q19f0', source: 'YOUTUBE', title: 'Gangnam Style', artist: 'PSY', thumbnailUrl: 'https://img.youtube.com/vi/9bZkp7q19f0/maxresdefault.jpg', url: 'https://www.youtube.com/watch?v=9bZkp7q19f0', duration: 252, addedAt: Date.now(), mood: 'K-Pop', colorHex: '#30689b' },
   { id: 'm-lat-1', videoId: 'h7U61Q74KmA', source: 'YOUTUBE', title: 'Me Porto Bonito', artist: 'Bad Bunny, Chencho', thumbnailUrl: getThumbnailUrl('h7U61Q74KmA'), url: 'https://www.youtube.com/watch?v=h7U61Q74KmA', duration: 178, addedAt: Date.now(), mood: 'Reggaeton', colorHex: '#9c27b0' },
   { id: 'm-lat-2', videoId: 'x815l2X8pA0', source: 'YOUTUBE', title: 'Ella Baila Sola', artist: 'Eslabon Armado, Peso Pluma', thumbnailUrl: getThumbnailUrl('x815l2X8pA0'), url: 'https://www.youtube.com/watch?v=x815l2X8pA0', duration: 195, addedAt: Date.now(), mood: 'Corridos', colorHex: '#795548' },
-  { id: 'm-lat-3', videoId: '688IBAmC_nE', source: 'YOUTUBE', title: 'QLQ', artist: 'Trueno', thumbnailUrl: getThumbnailUrl('688IBAmC_nE'), url: 'https://www.youtube.com/watch?v=688IBAmC_nE', duration: 200, addedAt: Date.now(), mood: 'Trap', colorHex: '#212121' },
-
-  // Pop / Mainstream
   { id: 'm-pop-1', videoId: 'fHI8X4OXluQ', source: 'YOUTUBE', title: 'Blinding Lights', artist: 'The Weeknd', thumbnailUrl: getThumbnailUrl('fHI8X4OXluQ'), url: 'https://www.youtube.com/watch?v=fHI8X4OXluQ', duration: 200, addedAt: Date.now(), mood: 'Synth Pop', colorHex: '#d32f2f' },
   { id: 'm-pop-2', videoId: '09R8_2nJtjg', source: 'YOUTUBE', title: 'Sugar', artist: 'Maroon 5', thumbnailUrl: getThumbnailUrl('09R8_2nJtjg'), url: 'https://www.youtube.com/watch?v=09R8_2nJtjg', duration: 235, addedAt: Date.now(), mood: 'Pop', colorHex: '#e91e63' },
-  { id: 'm-pop-3', videoId: 'kJQP7kiw5Fk', source: 'YOUTUBE', title: 'Despacito', artist: 'Luis Fonsi', thumbnailUrl: getThumbnailUrl('kJQP7kiw5Fk'), url: 'https://www.youtube.com/watch?v=kJQP7kiw5Fk', duration: 228, addedAt: Date.now(), mood: 'Latin Pop', colorHex: '#ff9800' },
-
-  // Rock
   { id: 'm-rock-1', videoId: 'bpOSxM0rNPM', source: 'YOUTUBE', title: 'Do I Wanna Know?', artist: 'Arctic Monkeys', thumbnailUrl: getThumbnailUrl('bpOSxM0rNPM'), url: 'https://www.youtube.com/watch?v=bpOSxM0rNPM', duration: 265, addedAt: Date.now(), mood: 'Indie Rock', colorHex: '#212121' },
-  { id: 'm-rock-2', videoId: 'fJ9rUzIMcZQ', source: 'YOUTUBE', title: 'Bohemian Rhapsody', artist: 'Queen', thumbnailUrl: getThumbnailUrl('fJ9rUzIMcZQ'), url: 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ', duration: 354, addedAt: Date.now(), mood: 'Classic Rock', colorHex: '#3f51b5' },
-
-  // Electronic / NCS
   { id: 'm-elec-1', videoId: 'bM7SZ5SBzyY', source: 'YOUTUBE', title: 'Alan Walker - Faded', artist: 'Alan Walker', thumbnailUrl: getThumbnailUrl('bM7SZ5SBzyY'), url: 'https://www.youtube.com/watch?v=bM7SZ5SBzyY', duration: 212, addedAt: Date.now(), mood: 'Electronic', colorHex: '#00bcd4' },
-  { id: 'm-elec-2', videoId: 'ALZHF5UqnU4', source: 'YOUTUBE', title: 'Marshmello - Alone', artist: 'Marshmello', thumbnailUrl: getThumbnailUrl('ALZHF5UqnU4'), url: 'https://www.youtube.com/watch?v=ALZHF5UqnU4', duration: 199, addedAt: Date.now(), mood: 'Electronic', colorHex: '#ffffff' },
 ];
 
 // --- API FUNCTIONS ---

@@ -9,7 +9,7 @@ import LyricsOverlay from './components/LyricsOverlay';
 import AuthScreen from './components/AuthScreen';
 import SettingsModal from './components/SettingsModal';
 import { saveState, loadState, loadUser, saveUser } from './utils/storage';
-import { fetchUserLikedVideos } from './services/youtubeService';
+import { fetchUserLikedVideos, DEFAULT_SONG } from './services/youtubeService';
 
 const INITIAL_QUEUE: Song[] = [];
 
@@ -74,7 +74,12 @@ function App() {
     const saved = loadState();
     if (saved.queue && saved.queue.length > 0) {
       setQueue(saved.queue);
+    } else {
+        // DEFAULT SONG LOGIC:
+        // If queue is empty (first launch or reset), load default song.
+        setQueue([DEFAULT_SONG]);
     }
+    
     if (saved.volume !== undefined) setVolume(saved.volume);
     if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
     if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
@@ -294,16 +299,33 @@ function App() {
     return <AuthScreen onLogin={handleLogin} />;
   }
 
+  const activeThumbnail = currentSong?.thumbnailUrl || null;
   const activeColor = currentSong?.colorHex || '#D0BCFF';
 
   return (
     <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
       
-      {/* Background */}
-      <div 
-        className="fixed inset-0 pointer-events-none transition-colors duration-1000 opacity-10 z-0"
-        style={{ background: `radial-gradient(circle at 50% 0%, ${activeColor}, transparent 70%)` }}
-      />
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+           {/* Fallback Color */}
+           <div className="absolute inset-0 bg-[#141218]" />
+           
+           {/* Blurred Image Layer */}
+           {activeThumbnail && (
+               <div className="absolute inset-0 transition-opacity duration-1000 ease-in-out">
+                    <img 
+                        src={activeThumbnail} 
+                        alt="" 
+                        className="w-full h-full object-cover blur-3xl opacity-40 scale-110" 
+                    />
+               </div>
+           )}
+           
+           {/* Gradient Overlay for Readability */}
+           <div 
+             className="absolute inset-0 bg-gradient-to-b from-[#141218]/60 via-[#141218]/80 to-[#141218]" 
+           />
+      </div>
 
       {/* 
         YouTube Player Container Logic 
@@ -358,7 +380,7 @@ function App() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/90 backdrop-blur-md border-b border-white/5">
+      <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3 pl-2">
             <div className="h-10 w-10 rounded-full bg-[#D0BCFF] flex items-center justify-center text-[#381E72] overflow-hidden">
                 {user.picture ? (
@@ -437,7 +459,7 @@ function App() {
             ))}
 
             {queue.length === 0 && (
-                <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20] rounded-[28px] mt-4 border border-[#49454F]">
+                <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20]/50 rounded-[28px] mt-4 border border-[#49454F]/50 backdrop-blur-sm">
                     <span className="material-symbols-rounded text-6xl mb-4 opacity-50">library_music</span>
                     <p className="text-center max-w-xs mb-6">
                         {user.isGuest ? "Search to add songs or paste a URL." : "Syncing your library or add new tracks."}
