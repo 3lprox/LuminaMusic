@@ -1,14 +1,15 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Song, RepeatMode, LyricLine, User } from './types';
+import { Song, RepeatMode, LyricLine, User, AudioQuality } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import ImportModal from './components/ImportModal';
 import NowPlayingBar from './components/NowPlayingBar';
 import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
 import AuthScreen from './components/AuthScreen';
+import SettingsModal from './components/SettingsModal';
 import { saveState, loadState, loadUser, saveUser } from './utils/storage';
-import { fetchUserLikedVideos } from './services/geminiService'; // Actually youtubeService
+import { fetchUserLikedVideos } from './services/youtubeService';
 
 const INITIAL_QUEUE: Song[] = [];
 
@@ -24,8 +25,11 @@ function App() {
   const [progress, setProgress] = useState(0);
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
+  const [audioQuality, setAudioQuality] = useState<AudioQuality>('NORMAL');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isVideoMode, setIsVideoMode] = useState(false); // New Video Mode State
   const [hasLoadedState, setHasLoadedState] = useState(false);
   
@@ -73,15 +77,16 @@ function App() {
     }
     if (saved.volume !== undefined) setVolume(saved.volume);
     if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
+    if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
     setHasLoadedState(true);
   }, []);
 
   // Save State on Change
   useEffect(() => {
     if (hasLoadedState) {
-      saveState(queue, volume, repeatMode);
+      saveState(queue, volume, repeatMode, audioQuality);
     }
-  }, [queue, volume, repeatMode, hasLoadedState]);
+  }, [queue, volume, repeatMode, audioQuality, hasLoadedState]);
 
   const showToast = (msg: string) => {
       setToastMessage(msg);
@@ -91,11 +96,14 @@ function App() {
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
   // --- YouTube Player Hook ---
-  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, getVideoData, isReady: isYTReady } = useYouTubePlayer({
+  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {
       // 1 = Playing, 2 = Paused, 0 = Ended
       if (state === 1) {
              setIsPlaying(true);
+             // Apply Quality Setting whenever a video starts/plays
+             setPlaybackQuality(audioQuality);
+             
              // SELF-HEALING METADATA:
              if (currentSong && (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0)) {
                  const data = getVideoData();
@@ -124,6 +132,13 @@ function App() {
         }
     }
   });
+
+  // Apply Quality when setting changes
+  useEffect(() => {
+      if(isYTReady) {
+          setPlaybackQuality(audioQuality);
+      }
+  }, [audioQuality, isYTReady, setPlaybackQuality]);
 
   // --- Pure YouTube Player Controller ---
   useEffect(() => {
@@ -353,10 +368,16 @@ function App() {
             </div>
             <h1 className="text-xl font-normal tracking-tight text-[#E6E0E9]">Lumina Music</h1>
         </div>
-        <div className="flex items-center gap-3">
-             <span className="text-sm text-[#CAC4D0] hidden sm:inline-block">
+        <div className="flex items-center gap-2">
+             <span className="text-sm text-[#CAC4D0] hidden sm:inline-block mr-2">
                 {user.isGuest ? 'Guest' : `Hi, ${user.username.split(' ')[0]}`}
              </span>
+             
+             {/* Settings Button */}
+             <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]" title="Settings">
+                <span className="material-symbols-rounded">settings</span>
+             </button>
+
              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#FFB4AB]" title="Log Out">
                 <span className="material-symbols-rounded">logout</span>
              </button>
@@ -440,8 +461,15 @@ function App() {
         user={user}
       />
 
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        audioQuality={audioQuality}
+        setAudioQuality={setAudioQuality}
+      />
+
       <NowPlayingBar 
-        playerState={{ currentSong, isPlaying, progress, volume, isMuted: volume === 0, queue, repeatMode }}
+        playerState={{ currentSong, isPlaying, progress, volume, isMuted: volume === 0, queue, repeatMode, audioQuality }}
         onTogglePlay={() => setIsPlaying(!isPlaying)}
         onNext={() => handleNext(false)}
         onPrev={handlePrev}

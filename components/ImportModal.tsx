@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { extractVideoId } from '../utils/youtubeUtils';
-import { searchYouTube, fetchVideoMetadata } from '../services/geminiService';
+import { searchYouTube, fetchVideoMetadata } from '../services/youtubeService';
 import { Song, User } from '../types';
 
 interface ImportModalProps {

@@ -33,6 +33,8 @@ export interface Song {
   lyrics?: LyricLine[];
 }
 
+export type AudioQuality = 'LOW' | 'NORMAL' | 'HIGH';
+
 export interface PlayerState {
   currentSong: Song | null;
   isPlaying: boolean;
@@ -41,6 +43,7 @@ export interface PlayerState {
   isMuted: boolean;
   queue: Song[];
   repeatMode: RepeatMode;
+  audioQuality: AudioQuality;
 }
 
 export enum RepeatMode {

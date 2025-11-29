@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { AudioQuality } from '../types';
 
 interface UseYouTubePlayerProps {
   onStateChange: (state: number) => void;
@@ -121,6 +122,19 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
     if (playerRef.current && isReady) playerRef.current.setVolume(volume);
   }, [isReady]);
 
+  const setPlaybackQuality = useCallback((quality: AudioQuality) => {
+    if (playerRef.current && isReady && playerRef.current.setPlaybackQuality) {
+        // Map abstract quality to YouTube API parameters
+        let ytQuality = 'default';
+        switch (quality) {
+            case 'LOW': ytQuality = 'small'; break; // 240p
+            case 'NORMAL': ytQuality = 'medium'; break; // 360p/480p
+            case 'HIGH': ytQuality = 'hd720'; break; // 720p+ (Max fidelity)
+        }
+        playerRef.current.setPlaybackQuality(ytQuality);
+    }
+  }, [isReady]);
+
   // New function to retrieve real metadata from the player
   const getVideoData = useCallback(() => {
       if (playerRef.current && isReady && playerRef.current.getVideoData) {
@@ -129,5 +143,5 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
       return null;
   }, [isReady]);
 
-  return { loadVideo, play, pause, seekTo, setVolume, getVideoData, isReady };
+  return { loadVideo, play, pause, seekTo, setVolume, setPlaybackQuality, getVideoData, isReady };
 };

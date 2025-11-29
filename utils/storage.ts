@@ -1,5 +1,5 @@
 
-import { Song, RepeatMode, User } from '../types';
+import { Song, RepeatMode, User, AudioQuality } from '../types';
 
 const STORAGE_KEY = 'lumina_music_state_v1';
 const USER_KEY = 'lumina_active_user';
@@ -8,6 +8,7 @@ interface PersistedState {
   queue: Song[];
   volume: number;
   repeatMode: RepeatMode;
+  audioQuality: AudioQuality;
 }
 
 export const saveUser = (user: User) => {
@@ -24,12 +25,13 @@ export const loadUser = (): User | null => {
   }
 };
 
-export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode) => {
+export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode, audioQuality: AudioQuality) => {
   try {
     const data: PersistedState = {
       queue: queue, // All songs are persistable now
       volume,
-      repeatMode
+      repeatMode,
+      audioQuality
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch (e) {
