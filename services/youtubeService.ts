@@ -235,7 +235,9 @@ export const fetchVideoMetadata = async (videoId: string, accessToken?: string):
       }
   } catch (e) {}
 
-  // Last Resort: Blind Import
+  // Last Resort: Blind Import (Return a skeleton song)
+  // This allows the player to load the video ID anyway and "self-heal" title/artist/duration
+  // once the player starts buffering, rather than blocking the user.
   return {
       id: videoId,
       videoId: videoId,

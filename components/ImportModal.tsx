@@ -79,20 +79,23 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
   const handleYoutubeUrlSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const url = String(formData.get('url') || '');
+    const url = String(formData.get('url') || '').trim();
 
     if (!url) return;
 
     const videoId = extractVideoId(url);
     if (!videoId) {
-      setError("Invalid YouTube URL");
+      setError("Invalid YouTube URL. Try a standard link.");
       return;
     }
 
     setIsLoading(true);
     setLoadingMessage('Fetching details...');
+    setError(null);
+    
     try {
       const metadata = await fetchVideoMetadata(videoId, credential);
+      // Even if metadata is basic (fallback), we import it
       if (metadata) {
         onImport([metadata]);
         onClose();
@@ -100,6 +103,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         setError("Could not load video details.");
       }
     } catch (err) {
+      console.error(err);
       setError("Failed to import.");
     } finally {
       setIsLoading(false);
@@ -122,7 +126,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
             {['SEARCH', 'URL'].map((tab) => (
                 <button 
                     key={tab}
-                    onClick={() => setActiveTab(tab as Tab)}
+                    onClick={() => { setActiveTab(tab as Tab); setError(null); }}
                     className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
                 >
                     {tab.charAt(0) + tab.slice(1).toLowerCase()}
@@ -136,7 +140,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                      <form onSubmit={handleSearchSubmit} className="flex gap-2">
                         <input 
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => { setSearchQuery(e.target.value); setError(null); }}
                             type="text" 
                             placeholder={user.isGuest ? "Search..." : "Search YouTube..."}
                             className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
@@ -170,7 +174,13 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                  <form onSubmit={handleYoutubeUrlSubmit} className="flex flex-col gap-4">
                     <p className="text-[#CAC4D0] text-sm mb-2">Paste a YouTube Link directly.</p>
                      <div className="group relative">
-                         <input name="url" type="text" placeholder="https://youtube.com/watch?v=..." className="w-full bg-[#141218] border border-[#938F99] rounded-[4px] px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" />
+                         <input 
+                            name="url" 
+                            type="url" 
+                            placeholder="https://youtu.be/..." 
+                            className="w-full bg-[#141218] border border-[#938F99] rounded-[4px] px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
+                            onChange={() => setError(null)}
+                         />
                      </div>
                      <button type="submit" disabled={isLoading} className="self-end px-6 py-2 rounded-full bg-[#D0BCFF] text-[#381E72] text-sm font-medium disabled:opacity-50 mt-2">
                         {isLoading ? 'Loading...' : 'Import'}
@@ -188,7 +198,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         </div>
 
         {error && (
-            <div className="bg-[#601410] text-[#FFB4AB] text-xs text-center p-2">
+            <div className="bg-[#601410] text-[#FFB4AB] text-xs text-center p-2 animate-in slide-in-from-bottom-2">
                 {error}
             </div>
         )}

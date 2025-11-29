@@ -10,9 +10,10 @@ export const extractVideoId = (url: string): string | null => {
     // If decode fails, use original
   }
 
-  // 2. Handle YouTube Music, Shorts, Embeds, standard Watch
+  // 2. Handle YouTube Music, Shorts, Embeds, standard Watch, and Mobile (m.)
   // Regex looks for 11 char ID after specific prefixes
-  const regExp = /(?:https?:\/\/)?(?:www\.|music\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  // Added 'm.' to the subdomain group
+  const regExp = /(?:https?:\/\/)?(?:www\.|music\.|m\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
   
   const match = decodedUrl.match(regExp);
   return (match && match[1]) ? match[1] : null;
