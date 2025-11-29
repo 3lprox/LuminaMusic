@@ -100,6 +100,47 @@ function App() {
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
+  // --- MEDIA SESSION API INTEGRATION (For Median.co Background Audio) ---
+  useEffect(() => {
+    if ('mediaSession' in navigator && currentSong) {
+      // 1. Update Metadata (Notification Shade / Lock Screen)
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: currentSong.title,
+        artist: currentSong.artist,
+        artwork: [
+          { src: currentSong.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' },
+          { src: currentSong.thumbnailUrl, sizes: '128x128', type: 'image/jpeg' }
+        ]
+      });
+
+      // 2. Set Action Handlers (Interact with native controls)
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+         handlePrev();
+      });
+      
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+         handleNext(false);
+      });
+
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime || details.seekTime === 0) {
+           handleSeek(details.seekTime);
+        }
+      });
+    }
+  }, [currentSong, currentSongIndex, queue]); // Update when song changes
+
+  // Update Playback State (Playing/Paused) for Media Session
+  useEffect(() => {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }
+  }, [isPlaying]);
+
+
   // --- YouTube Player Hook ---
   const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {

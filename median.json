@@ -1,0 +1,7 @@
+{
+  "services": {
+    "backgroundMediaPlayer": {
+      "active": true
+    }
+  }
+}
