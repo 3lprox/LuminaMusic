@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Song, RepeatMode, LyricLine, User, AudioQuality } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
@@ -174,7 +175,7 @@ function App() {
 
 
   // --- YouTube Player Hook ---
-  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, isReady: isYTReady } = useYouTubePlayer({
+  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, getDuration, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {
       // 1 = Playing, 2 = Paused, 0 = Ended
       if (state === 1) {
@@ -184,11 +185,21 @@ function App() {
              // Update Native State Immediately
              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
 
-             // SELF-HEALING METADATA
-             if (currentSong && (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0)) {
-                 const data = getVideoData();
-                 if (data) {
-                     updateSongMetadata(currentSongIndex, data.title, data.author);
+             // SELF-HEALING METADATA (AGGRESSIVE)
+             if (currentSong) {
+                 // 1. Fix Duration if missing
+                 const realDuration = getDuration ? getDuration() : 0;
+                 if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
+                     updateSongDuration(currentSongIndex, realDuration);
+                 }
+
+                 // 2. Fix Title/Artist if it was a blind import
+                 if (currentSong.title.startsWith('Loading Video') || !currentSong.artist) {
+                     const data = getVideoData();
+                     // Only update if we actually got valid strings back
+                     if (data && data.title && data.author) {
+                         updateSongMetadata(currentSongIndex, data.title, data.author);
+                     }
                  }
              }
       }
@@ -200,6 +211,7 @@ function App() {
     },
     onProgress: (currentTime, duration) => {
         setProgress(currentTime);
+        // Continuous duration check just in case start didn't catch it
         if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
@@ -208,6 +220,8 @@ function App() {
         console.error("YT Error", e);
         if (e === 150 || e === 101) {
             showToast("Video Unavailable (Restricted).");
+            // Auto skip restricted videos
+            setTimeout(() => handleNext(true), 1500);
         } else {
             showToast("Error playing video.");
         }
