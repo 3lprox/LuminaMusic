@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Song, RepeatMode, LyricLine, User, AudioQuality } from './types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Song, RepeatMode, LyricLine, User, AudioQuality, Language } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
 import ImportModal from './components/ImportModal';
 import NowPlayingBar from './components/NowPlayingBar';
@@ -8,9 +8,9 @@ import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
 import AuthScreen from './components/AuthScreen';
 import SettingsModal from './components/SettingsModal';
-// Explicit relative imports to fix resolution errors
 import { saveState, loadState, loadUser, saveUser } from './utils/storage';
 import { fetchUserLikedVideos, DEFAULT_SONG } from './services/youtubeService';
+import { getTranslation } from './utils/i18n';
 
 const INITIAL_QUEUE: Song[] = [];
 
@@ -27,6 +27,7 @@ function App() {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [audioQuality, setAudioQuality] = useState<AudioQuality>('NORMAL');
+  const [language, setLanguage] = useState<Language>('ES'); // Default to Spanish as requested by banner
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
@@ -34,11 +35,16 @@ function App() {
   const [isVideoMode, setIsVideoMode] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
   
+  // File Input Ref for Import
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const t = (key: any) => getTranslation(language, key);
 
   // Check Auth on Mount
   useEffect(() => {
@@ -51,26 +57,17 @@ function App() {
   // Listen for PWA install prompt
   useEffect(() => {
     const handler = (e: any) => {
-      // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
-      // Stash the event so it can be triggered later.
       setDeferredPrompt(e);
     };
-
     window.addEventListener('beforeinstallprompt', handler);
-
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
-    
-    // Show the install prompt
     deferredPrompt.prompt();
-    
-    // Wait for the user to respond to the prompt
     const { outcome } = await deferredPrompt.userChoice;
-    
     if (outcome === 'accepted') {
       setDeferredPrompt(null);
     }
@@ -112,27 +109,80 @@ function App() {
     if (saved.volume !== undefined) setVolume(saved.volume);
     if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
     if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
+    if (saved.language !== undefined) setLanguage(saved.language);
     setHasLoadedState(true);
   }, []);
 
   // Save State on Change
   useEffect(() => {
     if (hasLoadedState) {
-      saveState(queue, volume, repeatMode, audioQuality);
+      saveState(queue, volume, repeatMode, audioQuality, language);
     }
-  }, [queue, volume, repeatMode, audioQuality, hasLoadedState]);
+  }, [queue, volume, repeatMode, audioQuality, language, hasLoadedState]);
 
   const showToast = (msg: string) => {
       setToastMessage(msg);
       setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // --- IMPORT / EXPORT DATA ---
+  const handleExportData = () => {
+    const dataStr = JSON.stringify(queue, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = "lumina_library_backup.json";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(t('downloadData') + " OK!");
+  };
+
+  const handleImportDataClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const importedData = JSON.parse(event.target?.result as string);
+            if (Array.isArray(importedData)) {
+                // We append imported songs to queue, or replace? 
+                // Let's replace for a full restore feel, or append unique.
+                // For simplicity of "restore", let's append unique ones.
+                const existingIds = new Set(queue.map(s => s.id));
+                const uniqueNew = importedData.filter((s: Song) => !existingIds.has(s.id));
+                
+                if (uniqueNew.length > 0) {
+                    setQueue(prev => [...prev, ...uniqueNew]);
+                    showToast(t('dataImported'));
+                } else {
+                    showToast("No new songs found in file.");
+                }
+            } else {
+                throw new Error("Invalid format");
+            }
+        } catch (err) {
+            console.error(err);
+            showToast(t('invalidFile'));
+        } finally {
+            // Reset input so same file can be selected again
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+    reader.readAsText(file);
+  };
+
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
-  // --- MEDIA SESSION API INTEGRATION (Critical for Median.co Background Audio) ---
+  // --- MEDIA SESSION API INTEGRATION ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentSong) {
-      // Ensure artwork is valid to prevent native crashes
       const artwork = currentSong.thumbnailUrl 
         ? [
             { src: currentSong.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' },
@@ -146,27 +196,16 @@ function App() {
         artwork: artwork
       });
 
-      navigator.mediaSession.setActionHandler('play', () => {
-          setIsPlaying(true);
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-          setIsPlaying(false);
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-         handlePrev();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-         handleNext(false);
-      });
+      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
+      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
+      navigator.mediaSession.setActionHandler('previoustrack', handlePrev);
+      navigator.mediaSession.setActionHandler('nexttrack', () => handleNext(false));
       navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime || details.seekTime === 0) {
-           handleSeek(details.seekTime);
-        }
+        if (details.seekTime || details.seekTime === 0) handleSeek(details.seekTime);
       });
     }
   }, [currentSong, currentSongIndex, queue]);
 
-  // Sync Playback State specifically for Native Controls
   useEffect(() => {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -177,26 +216,18 @@ function App() {
   // --- YouTube Player Hook ---
   const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, getDuration, isReady: isYTReady } = useYouTubePlayer({
     onStateChange: (state) => {
-      // 1 = Playing, 2 = Paused, 0 = Ended
       if (state === 1) {
              setIsPlaying(true);
              setPlaybackQuality(audioQuality);
-             
-             // Update Native State Immediately
              if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
 
-             // SELF-HEALING METADATA (AGGRESSIVE)
              if (currentSong) {
-                 // 1. Fix Duration if missing
                  const realDuration = getDuration ? getDuration() : 0;
                  if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
                      updateSongDuration(currentSongIndex, realDuration);
                  }
-
-                 // 2. Fix Title/Artist if it was a blind import
                  if (currentSong.title.startsWith('Loading Video') || !currentSong.artist) {
                      const data = getVideoData();
-                     // Only update if we actually got valid strings back
                      if (data && data.title && data.author) {
                          updateSongMetadata(currentSongIndex, data.title, data.author);
                      }
@@ -207,20 +238,17 @@ function App() {
           setIsPlaying(false);
           if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
       }
-      if (state === 0) handleNext(true); // Auto advance
+      if (state === 0) handleNext(true);
     },
     onProgress: (currentTime, duration) => {
         setProgress(currentTime);
-        // Continuous duration check just in case start didn't catch it
         if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
     },
     onError: (e) => {
-        console.error("YT Error", e);
         if (e === 150 || e === 101) {
             showToast("Video Unavailable (Restricted).");
-            // Auto skip restricted videos
             setTimeout(() => handleNext(true), 1500);
         } else {
             showToast("Error playing video.");
@@ -234,7 +262,6 @@ function App() {
       }
   }, [audioQuality, isYTReady, setPlaybackQuality]);
 
-  // --- Player Controller ---
   useEffect(() => {
     if (!currentSong) {
       if (isYTReady) pauseYT();
@@ -242,14 +269,12 @@ function App() {
       setProgress(0);
       return;
     }
-
     if (isYTReady) {
        setVolumeYT(volume);
        loadVideo(currentSong.videoId || '');
     }
   }, [currentSong, isYTReady, currentSongIndex, queue]);
 
-  // Sync Play/Pause
   useEffect(() => {
     if (isYTReady && currentSong) {
         isPlaying ? playYT() : pauseYT();
@@ -279,8 +304,7 @@ function App() {
       if (!currentSong) return;
       setQueue(prev => {
           const newQueue = [...prev];
-          const updatedSong = { ...newQueue[currentSongIndex], lyrics };
-          newQueue[currentSongIndex] = updatedSong;
+          newQueue[currentSongIndex] = { ...newQueue[currentSongIndex], lyrics };
           return newQueue;
       });
   };
@@ -329,15 +353,12 @@ function App() {
   const handleImport = (newSongs: Song[]) => {
     const existingIds = new Set(queue.map(s => s.videoId || s.id));
     const uniqueSongs = newSongs.filter(s => !existingIds.has(s.videoId || s.id));
-    
     if (uniqueSongs.length === 0) {
         showToast("Song already in library.");
         return;
     }
-
     setQueue(prev => [...prev, ...uniqueSongs]);
-    showToast(`Added ${uniqueSongs.length} track${uniqueSongs.length > 1 ? 's' : ''}`);
-    
+    showToast(`Added ${uniqueSongs.length} tracks`);
     if (queue.length === 0) {
         setCurrentSongIndex(0);
         setIsPlaying(true);
@@ -369,7 +390,7 @@ function App() {
   };
 
   const handleClearAll = () => {
-      if (window.confirm("Are you sure you want to delete all songs from your library?")) {
+      if (window.confirm(t('confirmClear'))) {
           setIsPlaying(false);
           setCurrentSongIndex(-1);
           setProgress(0);
@@ -392,52 +413,38 @@ function App() {
   return (
     <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
       
+      {/* Hidden File Input for Import */}
+      <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleFileImport} 
+          accept=".json" 
+          className="hidden" 
+      />
+
       {/* Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
            <div className="absolute inset-0 bg-[#141218]" />
            {activeThumbnail && (
                <div className="absolute inset-0 transition-opacity duration-1000 ease-in-out">
-                    <img 
-                        src={activeThumbnail} 
-                        alt="" 
-                        className="w-full h-full object-cover blur-3xl opacity-40 scale-110" 
-                    />
+                    <img src={activeThumbnail} alt="" className="w-full h-full object-cover blur-3xl opacity-40 scale-110" />
                </div>
            )}
            <div className="absolute inset-0 bg-gradient-to-b from-[#141218]/60 via-[#141218]/80 to-[#141218]" />
       </div>
 
-      {/* Hidden Player for Median.co / Background Audio */}
-      <div 
-        className={`transition-all duration-300 ease-in-out
-            ${isVideoMode 
-                ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' 
-                : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-0 pointer-events-none'
-            }
-        `}
-      >
-          <style>{`
-            #youtube-player-hidden {
-                width: 100% !important;
-                height: 100% !important;
-                max-width: 100%;
-                max-height: 100%;
-            }
-          `}</style>
-          
+      {/* Hidden Player */}
+      <div className={`transition-all duration-300 ease-in-out ${isVideoMode ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-0 pointer-events-none'}`}>
+          <style>{`#youtube-player-hidden { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }`}</style>
           <div id="youtube-player-hidden" className="w-full h-full" />
-          
           {isVideoMode && (
-              <button 
-                onClick={() => setIsVideoMode(false)}
-                className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 p-3 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-colors"
-              >
+              <button onClick={() => setIsVideoMode(false)} className="absolute top-4 right-4 sm:top-6 sm:right-6 z-30 p-3 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-white/20 transition-colors">
                   <span className="material-symbols-rounded text-2xl">close</span>
               </button>
           )}
       </div>
 
-      {/* Toast Notification */}
+      {/* Toast */}
       {toastMessage && (
           <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-top-4 fade-in duration-300">
               <div className="bg-[#E6E0E9] text-[#141218] px-6 py-3 rounded-full shadow-xl font-medium text-sm flex items-center gap-2">
@@ -463,19 +470,13 @@ function App() {
              <span className="text-sm text-[#CAC4D0] hidden sm:inline-block mr-2">
                 {user.isGuest ? 'Guest' : `Hi, ${user.username.split(' ')[0]}`}
              </span>
-             
-             {/* PWA Install Button */}
              {deferredPrompt && (
-                <button 
-                    onClick={handleInstallClick} 
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D0BCFF] text-[#381E72] text-xs font-medium hover:shadow-md animate-pulse"
-                >
+                <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D0BCFF] text-[#381E72] text-xs font-medium hover:shadow-md animate-pulse">
                     <span className="material-symbols-rounded text-lg">install_mobile</span>
                     <span className="hidden sm:inline">Install App</span>
                 </button>
              )}
-
-             <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]" title="Settings">
+             <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]" title={t('settings')}>
                 <span className="material-symbols-rounded">settings</span>
              </button>
              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#FFB4AB]" title="Log Out">
@@ -486,36 +487,61 @@ function App() {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-screen-xl mx-auto px-4 pb-40 pt-6">
+        
+        {/* Migration Banner (Bilingual) */}
+        <div className="mb-6 bg-gradient-to-r from-[#381E72] to-[#4F378B] p-4 rounded-[16px] shadow-lg border border-[#D0BCFF]/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+                <span className="material-symbols-rounded text-[#D0BCFF] text-2xl mt-1">campaign</span>
+                <div>
+                    <h3 className="text-[#E6E0E9] font-medium text-lg">{t('bannerTitle')}</h3>
+                    <p className="text-[#D0BCFF] text-sm mt-1">
+                        {t('bannerText')} <a href="https://lumina-music.netlify.app" target="_blank" rel="noreferrer" className="underline font-bold hover:text-white">Lumina-music.netlify.app</a>
+                    </p>
+                    <p className="text-[#CAC4D0] text-xs mt-1 italic opacity-80">{t('bannerIgnore')}</p>
+                </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 self-end md:self-center">
+                <button 
+                    onClick={handleExportData}
+                    className="flex items-center justify-center gap-2 bg-[#EADDFF] text-[#21005D] px-4 py-2 rounded-full text-sm font-medium hover:bg-[#D0BCFF] transition-colors shadow-sm whitespace-nowrap"
+                >
+                    <span className="material-symbols-rounded text-lg">download</span>
+                    {t('downloadData')}
+                </button>
+                <button 
+                    onClick={handleImportDataClick}
+                    className="flex items-center justify-center gap-2 bg-[#21005D] text-[#EADDFF] px-4 py-2 rounded-full text-sm font-medium hover:bg-[#381E72] border border-[#EADDFF]/20 transition-colors shadow-sm whitespace-nowrap"
+                >
+                    <span className="material-symbols-rounded text-lg">upload</span>
+                    {t('importData')}
+                </button>
+            </div>
+        </div>
+
         {isSyncing && (
              <div className="mb-4 bg-[#2B2930] rounded-xl p-4 flex items-center gap-3 animate-pulse border border-[#D0BCFF]/30">
                  <span className="material-symbols-rounded text-[#D0BCFF] animate-spin">sync</span>
-                 <p className="text-sm text-[#E6E0E9]">Syncing your library from YouTube...</p>
+                 <p className="text-sm text-[#E6E0E9]">{t('syncing')}</p>
              </div>
         )}
 
         <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
-                <h2 className="text-[28px] leading-9 font-normal mb-1">Your Library</h2>
+                <h2 className="text-[28px] leading-9 font-normal mb-1">{t('libraryTitle')}</h2>
                 <p className="text-[#CAC4D0] text-sm tracking-wide">
-                   {queue.length} tracks
+                   {queue.length} {t('tracks')}
                 </p>
             </div>
             <div className="flex gap-2">
                 {queue.length > 0 && (
-                    <button 
-                        onClick={handleClearAll}
-                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-[16px] text-[#FFB4AB] hover:bg-[#FFB4AB]/10 transition-colors"
-                    >
+                    <button onClick={handleClearAll} className="flex items-center justify-center gap-2 px-4 py-3 rounded-[16px] text-[#FFB4AB] hover:bg-[#FFB4AB]/10 transition-colors">
                         <span className="material-symbols-rounded">delete_sweep</span>
-                        <span className="text-sm font-medium">Clear All</span>
+                        <span className="text-sm font-medium">{t('clearAll')}</span>
                     </button>
                 )}
-                <button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all"
-                >
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all">
                     <span className="material-symbols-rounded">search</span>
-                    <span className="text-sm font-medium tracking-wide">Add Tracks</span>
+                    <span className="text-sm font-medium tracking-wide">{t('addTracks')}</span>
                 </button>
             </div>
         </div>
@@ -537,7 +563,7 @@ function App() {
                 <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20]/50 rounded-[28px] mt-4 border border-[#49454F]/50 backdrop-blur-sm">
                     <span className="material-symbols-rounded text-6xl mb-4 opacity-50">library_music</span>
                     <p className="text-center max-w-xs mb-6">
-                        {user.isGuest ? "Search to add songs or paste a URL." : "Syncing your library or add new tracks."}
+                        {user.isGuest ? t('guestSearch') : t('userSync')}
                     </p>
                 </div>
             )}
@@ -564,6 +590,8 @@ function App() {
         onClose={() => setIsSettingsOpen(false)}
         audioQuality={audioQuality}
         setAudioQuality={setAudioQuality}
+        language={language}
+        setLanguage={setLanguage}
       />
 
       <NowPlayingBar 

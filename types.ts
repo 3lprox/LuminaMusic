@@ -34,6 +34,7 @@ export interface Song {
 }
 
 export type AudioQuality = 'LOW' | 'NORMAL' | 'HIGH';
+export type Language = 'EN' | 'ES';
 
 export interface PlayerState {
   currentSong: Song | null;
