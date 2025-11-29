@@ -1,3 +1,4 @@
+
 import { Song, RepeatMode, User, AudioQuality } from '../types';
 
 const STORAGE_KEY = 'lumina_music_state_v1';
@@ -27,7 +28,7 @@ export const loadUser = (): User | null => {
 export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode, audioQuality: AudioQuality) => {
   try {
     const data: PersistedState = {
-      queue: queue, // All songs are persistable now
+      queue: queue,
       volume,
       repeatMode,
       audioQuality

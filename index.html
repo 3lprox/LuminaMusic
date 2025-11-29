@@ -2,8 +2,15 @@
 <html lang="en" class="dark h-full">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#141218" />
+    
+    <!-- PWA / Mobile Web App Capable -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lumina Music" />
+
     <title>Lumina Music</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,11 +22,13 @@
         height: 100%;
         margin: 0;
         padding: 0;
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile app feel */
       }
       body {
         font-family: 'Roboto Flex', sans-serif;
         background-color: #141218; /* MD3 Surface */
         color: #E6E0E9;
+        -webkit-tap-highlight-color: transparent;
       }
       /* Custom scrollbar for Webkit */
       ::-webkit-scrollbar {

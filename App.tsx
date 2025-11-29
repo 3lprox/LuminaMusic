@@ -7,7 +7,7 @@ import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
 import AuthScreen from './components/AuthScreen';
 import SettingsModal from './components/SettingsModal';
-// Explicit relative import to avoid alias issues
+// Explicit relative imports to fix resolution errors
 import { saveState, loadState, loadUser, saveUser } from './utils/storage';
 import { fetchUserLikedVideos, DEFAULT_SONG } from './services/youtubeService';
 
@@ -30,11 +30,14 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isVideoMode, setIsVideoMode] = useState(false); // New Video Mode State
+  const [isVideoMode, setIsVideoMode] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
   
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   // Check Auth on Mount
   useEffect(() => {
@@ -44,11 +47,38 @@ function App() {
     }
   }, []);
 
+  // Listen for PWA install prompt
+  useEffect(() => {
+    const handler = (e: any) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    // Show the install prompt
+    deferredPrompt.prompt();
+    
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
+
   const handleLogin = async (loggedInUser: User) => {
     setUser(loggedInUser);
     saveUser(loggedInUser);
 
-    // Sync if we have an access token
     if (loggedInUser.accessToken && !loggedInUser.isGuest) {
         setIsSyncing(true);
         showToast("Syncing your Liked Videos...");
@@ -75,8 +105,6 @@ function App() {
     if (saved.queue && saved.queue.length > 0) {
       setQueue(saved.queue);
     } else {
-        // DEFAULT SONG LOGIC:
-        // If queue is empty (first launch or reset), load default song.
         setQueue([DEFAULT_SONG]);
     }
     
@@ -100,40 +128,44 @@ function App() {
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
-  // --- MEDIA SESSION API INTEGRATION (For Median.co Background Audio) ---
+  // --- MEDIA SESSION API INTEGRATION (Critical for Median.co Background Audio) ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentSong) {
-      // 1. Update Metadata (Notification Shade / Lock Screen)
+      // Ensure artwork is valid to prevent native crashes
+      const artwork = currentSong.thumbnailUrl 
+        ? [
+            { src: currentSong.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' },
+            { src: currentSong.thumbnailUrl, sizes: '128x128', type: 'image/jpeg' }
+          ]
+        : [];
+
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentSong.title,
-        artist: currentSong.artist,
-        artwork: [
-          { src: currentSong.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' },
-          { src: currentSong.thumbnailUrl, sizes: '128x128', type: 'image/jpeg' }
-        ]
+        title: currentSong.title || 'Unknown Title',
+        artist: currentSong.artist || 'Unknown Artist',
+        artwork: artwork
       });
 
-      // 2. Set Action Handlers (Interact with native controls)
-      navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
-      navigator.mediaSession.setActionHandler('pause', () => setIsPlaying(false));
-      
+      navigator.mediaSession.setActionHandler('play', () => {
+          setIsPlaying(true);
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+          setIsPlaying(false);
+      });
       navigator.mediaSession.setActionHandler('previoustrack', () => {
          handlePrev();
       });
-      
       navigator.mediaSession.setActionHandler('nexttrack', () => {
          handleNext(false);
       });
-
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime || details.seekTime === 0) {
            handleSeek(details.seekTime);
         }
       });
     }
-  }, [currentSong, currentSongIndex, queue]); // Update when song changes
+  }, [currentSong, currentSongIndex, queue]);
 
-  // Update Playback State (Playing/Paused) for Media Session
+  // Sync Playback State specifically for Native Controls
   useEffect(() => {
     if ('mediaSession' in navigator) {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -147,10 +179,12 @@ function App() {
       // 1 = Playing, 2 = Paused, 0 = Ended
       if (state === 1) {
              setIsPlaying(true);
-             // Apply Quality Setting whenever a video starts/plays
              setPlaybackQuality(audioQuality);
              
-             // SELF-HEALING METADATA:
+             // Update Native State Immediately
+             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+
+             // SELF-HEALING METADATA
              if (currentSong && (currentSong.title.startsWith('Loading Video') || currentSong.duration === 0)) {
                  const data = getVideoData();
                  if (data) {
@@ -158,35 +192,35 @@ function App() {
                  }
              }
       }
-      if (state === 2) setIsPlaying(false);
+      if (state === 2) {
+          setIsPlaying(false);
+          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      }
       if (state === 0) handleNext(true); // Auto advance
     },
     onProgress: (currentTime, duration) => {
         setProgress(currentTime);
-        // Update duration if needed
         if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
             updateSongDuration(currentSongIndex, duration);
         }
     },
     onError: (e) => {
         console.error("YT Error", e);
-        // Common YouTube Error Codes: 100, 101, 150 = Restricted/Embed Blocked
         if (e === 150 || e === 101) {
-            showToast("Playback Restricted: This video cannot be played in a 3rd party app.");
+            showToast("Video Unavailable (Restricted).");
         } else {
             showToast("Error playing video.");
         }
     }
   });
 
-  // Apply Quality when setting changes
   useEffect(() => {
       if(isYTReady) {
           setPlaybackQuality(audioQuality);
       }
   }, [audioQuality, isYTReady, setPlaybackQuality]);
 
-  // --- Pure YouTube Player Controller ---
+  // --- Player Controller ---
   useEffect(() => {
     if (!currentSong) {
       if (isYTReady) pauseYT();
@@ -197,12 +231,11 @@ function App() {
 
     if (isYTReady) {
        setVolumeYT(volume);
-       // Check if song changed
        loadVideo(currentSong.videoId || '');
     }
   }, [currentSong, isYTReady, currentSongIndex, queue]);
 
-  // Sync Play/Pause State specifically
+  // Sync Play/Pause
   useEffect(() => {
     if (isYTReady && currentSong) {
         isPlaying ? playYT() : pauseYT();
@@ -341,17 +374,13 @@ function App() {
   }
 
   const activeThumbnail = currentSong?.thumbnailUrl || null;
-  const activeColor = currentSong?.colorHex || '#D0BCFF';
 
   return (
     <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
       
       {/* Dynamic Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-           {/* Fallback Color */}
            <div className="absolute inset-0 bg-[#141218]" />
-           
-           {/* Blurred Image Layer */}
            {activeThumbnail && (
                <div className="absolute inset-0 transition-opacity duration-1000 ease-in-out">
                     <img 
@@ -361,20 +390,10 @@ function App() {
                     />
                </div>
            )}
-           
-           {/* Gradient Overlay for Readability */}
-           <div 
-             className="absolute inset-0 bg-gradient-to-b from-[#141218]/60 via-[#141218]/80 to-[#141218]" 
-           />
+           <div className="absolute inset-0 bg-gradient-to-b from-[#141218]/60 via-[#141218]/80 to-[#141218]" />
       </div>
 
-      {/* 
-        YouTube Player Container Logic 
-        - Default (Audio Mode): Positioned bottom-right but BEHIND content.
-          Using z-0 with relative main content z-10 makes it functionally "background"
-          but technically "visible" in the viewport stack, fixing the 1-second pause bug.
-        - Video Mode: Fixed inset-0, z-20 (above everything).
-      */}
+      {/* Hidden Player for Median.co / Background Audio */}
       <div 
         className={`transition-all duration-300 ease-in-out
             ${isVideoMode 
@@ -383,10 +402,6 @@ function App() {
             }
         `}
       >
-          {/* 
-             FORCE IFRAME SIZE OVERRIDE 
-             The hook sets width=100% height=100%. We just need to ensure the container behaves.
-          */}
           <style>{`
             #youtube-player-hidden {
                 width: 100% !important;
@@ -396,10 +411,8 @@ function App() {
             }
           `}</style>
           
-          {/* The Hook mounts the iframe to this ID */}
           <div id="youtube-player-hidden" className="w-full h-full" />
           
-          {/* Close Button for Video Mode */}
           {isVideoMode && (
               <button 
                 onClick={() => setIsVideoMode(false)}
@@ -437,11 +450,20 @@ function App() {
                 {user.isGuest ? 'Guest' : `Hi, ${user.username.split(' ')[0]}`}
              </span>
              
-             {/* Settings Button */}
+             {/* PWA Install Button */}
+             {deferredPrompt && (
+                <button 
+                    onClick={handleInstallClick} 
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D0BCFF] text-[#381E72] text-xs font-medium hover:shadow-md animate-pulse"
+                >
+                    <span className="material-symbols-rounded text-lg">install_mobile</span>
+                    <span className="hidden sm:inline">Install App</span>
+                </button>
+             )}
+
              <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]" title="Settings">
                 <span className="material-symbols-rounded">settings</span>
              </button>
-
              <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#FFB4AB]" title="Log Out">
                 <span className="material-symbols-rounded">logout</span>
              </button>
@@ -450,8 +472,6 @@ function App() {
 
       {/* Main Content */}
       <main className="relative z-10 max-w-screen-xl mx-auto px-4 pb-40 pt-6">
-        
-        {/* Sync Status Banner */}
         {isSyncing && (
              <div className="mb-4 bg-[#2B2930] rounded-xl p-4 flex items-center gap-3 animate-pulse border border-[#D0BCFF]/30">
                  <span className="material-symbols-rounded text-[#D0BCFF] animate-spin">sync</span>
