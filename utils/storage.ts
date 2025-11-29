@@ -1,8 +1,8 @@
 
-import { Song, RepeatMode, User, AudioQuality, Language } from '../types';
+import { Song, RepeatMode, User, AudioQuality, Language } from './types';
 
 const STORAGE_KEY = 'lumina_music_state_v1';
-const USER_KEY = 'lumina_active_user';
+const API_KEY_STORAGE_KEY = 'lumina_youtube_api_key'; // Changed key name for clarity
 
 interface PersistedState {
   queue: Song[];
@@ -12,19 +12,19 @@ interface PersistedState {
   language: Language;
 }
 
-export const saveUser = (user: User) => {
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-};
-
-export const loadUser = (): User | null => {
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
+// Simplified user storage to just save/load API key
+export const saveApiKey = (apiKey: string | undefined) => {
+  if (apiKey) {
+    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+  } else {
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
   }
 };
+
+export const loadApiKey = (): string | undefined => {
+  return localStorage.getItem(API_KEY_STORAGE_KEY) || undefined;
+};
+
 
 export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode, audioQuality: AudioQuality, language: Language) => {
   try {

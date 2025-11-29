@@ -6,18 +6,17 @@ import ImportModal from './components/ImportModal';
 import NowPlayingBar from './components/NowPlayingBar';
 import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
-import AuthScreen from './components/AuthScreen';
 import SettingsModal from './components/SettingsModal';
-import { saveState, loadState, loadUser, saveUser } from './utils/storage';
-import { fetchUserLikedVideos, DEFAULT_SONG } from './services/youtubeService';
+import { saveState, loadState, saveApiKey, loadApiKey } from './utils/storage';
+import { DEFAULT_SONG } from './services/youtubeService';
 import { getTranslation } from './utils/i18n';
 
 const INITIAL_QUEUE: Song[] = [];
 
 function App() {
-  // Auth State
-  const [user, setUser] = useState<User | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
+  // User/Auth State (simplified to always be Guest with optional API key)
+  const [apiKey, setApiKey] = useState<string | undefined>(undefined);
+  const user: User = { username: "Guest", isGuest: true, apiKey };
 
   // App State
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
@@ -27,7 +26,7 @@ function App() {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [audioQuality, setAudioQuality] = useState<AudioQuality>('NORMAL');
-  const [language, setLanguage] = useState<Language>('ES'); // Default to Spanish as requested by banner
+  const [language, setLanguage] = useState<Language>('ES');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
@@ -35,26 +34,35 @@ function App() {
   const [isVideoMode, setIsVideoMode] = useState(false);
   const [hasLoadedState, setHasLoadedState] = useState(false);
   
-  // File Input Ref for Import
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const syncTimeoutRef = useRef<number | null>(null); // Still used for previous WebDAV sync if any, but now only for auto-save if re-added
 
-  // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // PWA Install State
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const t = (key: any) => getTranslation(language, key);
 
-  // Check Auth on Mount
+  // Load API Key and Persistence on Mount
   useEffect(() => {
-    const savedUser = loadUser();
-    if (savedUser) {
-      setUser(savedUser);
+    const savedApiKey = loadApiKey();
+    if (savedApiKey) {
+      setApiKey(savedApiKey);
     }
+
+    const saved = loadState();
+    if (saved.queue && saved.queue.length > 0) {
+      setQueue(saved.queue);
+    } else if (queue.length === 0) {
+        setQueue([DEFAULT_SONG]);
+    }
+    
+    if (saved.volume !== undefined) setVolume(saved.volume);
+    if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
+    if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
+    if (saved.language !== undefined) setLanguage(saved.language);
+    setHasLoadedState(true);
   }, []);
 
-  // Listen for PWA install prompt
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
@@ -72,46 +80,12 @@ function App() {
       setDeferredPrompt(null);
     }
   };
-
-  const handleLogin = async (loggedInUser: User) => {
-    setUser(loggedInUser);
-    saveUser(loggedInUser);
-
-    if (loggedInUser.accessToken && !loggedInUser.isGuest) {
-        setIsSyncing(true);
-        showToast("Syncing your Liked Videos...");
-        const likedSongs = await fetchUserLikedVideos(loggedInUser.accessToken);
-        if (likedSongs.length > 0) {
-            handleImport(likedSongs);
-            showToast(`Synced ${likedSongs.length} songs!`);
-        } else {
-            showToast("No new songs to sync.");
-        }
-        setIsSyncing(false);
-    }
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('lumina_active_user'); 
-    setQueue([]); 
-  };
-
-  // Load Persistence on Mount
-  useEffect(() => {
-    const saved = loadState();
-    if (saved.queue && saved.queue.length > 0) {
-      setQueue(saved.queue);
-    } else {
-        setQueue([DEFAULT_SONG]);
-    }
-    
-    if (saved.volume !== undefined) setVolume(saved.volume);
-    if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
-    if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
-    if (saved.language !== undefined) setLanguage(saved.language);
-    setHasLoadedState(true);
-  }, []);
+  
+  const handleUpdateApiKey = (newKey: string | undefined) => {
+    setApiKey(newKey);
+    saveApiKey(newKey);
+    showToast(t('apiKeyUpdated'));
+  }
 
   // Save State on Change
   useEffect(() => {
@@ -125,7 +99,6 @@ function App() {
       setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // --- IMPORT / EXPORT DATA ---
   const handleExportData = () => {
     const dataStr = JSON.stringify(queue, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
@@ -152,9 +125,6 @@ function App() {
         try {
             const importedData = JSON.parse(event.target?.result as string);
             if (Array.isArray(importedData)) {
-                // We append imported songs to queue, or replace? 
-                // Let's replace for a full restore feel, or append unique.
-                // For simplicity of "restore", let's append unique ones.
                 const existingIds = new Set(queue.map(s => s.id));
                 const uniqueNew = importedData.filter((s: Song) => !existingIds.has(s.id));
                 
@@ -162,7 +132,7 @@ function App() {
                     setQueue(prev => [...prev, ...uniqueNew]);
                     showToast(t('dataImported'));
                 } else {
-                    showToast("No new songs found in file.");
+                    showToast(t('noNewSongs'));
                 }
             } else {
                 throw new Error("Invalid format");
@@ -171,7 +141,6 @@ function App() {
             console.error(err);
             showToast(t('invalidFile'));
         } finally {
-            // Reset input so same file can be selected again
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
@@ -180,7 +149,156 @@ function App() {
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
 
-  // --- MEDIA SESSION API INTEGRATION ---
+  // --- YouTube Player Hook ---
+  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, getDuration, isReady: isYTReady } = useYouTubePlayer({
+    onStateChange: (state) => {
+      if (state === 1) { // Playing
+             setIsPlaying(true);
+             setPlaybackQuality(audioQuality);
+             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+
+             if (currentSong) {
+                 const realDuration = getDuration ? getDuration() : 0;
+                 if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
+                     updateSongDuration(currentSongIndex, realDuration);
+                 }
+                 const data = getVideoData(); // Get current player data (title, author)
+                 if (data && data.title && data.author) {
+                     // Only update if it's the generic "Loading Video" or a significant change
+                     if (currentSong.title.startsWith('Loading Video') || currentSong.artist === 'Unknown Artist') {
+                         updateSongMetadata(currentSongIndex, data.title, data.author);
+                     }
+                 }
+             }
+      }
+      if (state === 2) { // Paused
+          setIsPlaying(false);
+          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      }
+      // Moved handleNext to its own useCallback below.
+      // Call directly in onStateChange, as handleNext needs to be defined
+      if (state === 0) handleNext(true); // Ended
+    },
+    onProgress: (currentTime, duration) => {
+        setProgress(currentTime);
+        if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
+            updateSongDuration(currentSongIndex, duration);
+        }
+    },
+    onError: (e) => {
+        if (e === 150 || e === 101) {
+            showToast(t('videoUnavailable'));
+            setTimeout(() => handleNext(true), 1500);
+        } else {
+            showToast(t('errorPlaying'));
+        }
+    }
+  });
+
+  useEffect(() => {
+      if(isYTReady) {
+          setPlaybackQuality(audioQuality);
+      }
+  }, [audioQuality, isYTReady, setPlaybackQuality]);
+
+  // Handle playing/pausing when `isPlaying` state changes
+  useEffect(() => {
+    if (isYTReady && currentSong) {
+        isPlaying ? playYT() : pauseYT();
+    }
+  }, [isPlaying, currentSong, isYTReady, playYT, pauseYT]);
+
+  // Load video when currentSong changes
+  useEffect(() => {
+    if (!currentSong) {
+      if (isYTReady) pauseYT();
+      setIsPlaying(false);
+      setProgress(0);
+      return;
+    }
+    if (isYTReady) {
+       setVolumeYT(volume);
+       loadVideo(currentSong.videoId || '');
+    }
+  }, [currentSong, isYTReady, currentSongIndex, loadVideo, volume, setVolumeYT]); // Added setVolumeYT to dependencies
+
+  const updateSongDuration = (index: number, duration: number) => {
+    setQueue(prev => {
+        if (!prev[index]) return prev;
+        if (Math.abs(prev[index].duration - duration) < 1) return prev; // Avoid unnecessary updates
+        const newQueue = [...prev];
+        newQueue[index] = { ...newQueue[index], duration };
+        return newQueue;
+    });
+  };
+
+  const updateSongMetadata = (index: number, title: string, artist: string) => {
+    setQueue(prev => {
+        if (!prev[index]) return prev;
+        const newQueue = [...prev];
+        newQueue[index] = { ...newQueue[index], title, artist, mood: 'YouTube' }; // Update mood if it was generic
+        return newQueue;
+    });
+  };
+
+  const handleLyricsImport = (lyrics: LyricLine[]) => {
+      if (!currentSong) return;
+      setQueue(prev => {
+          const newQueue = [...prev];
+          newQueue[currentSongIndex] = { ...newQueue[currentSongIndex], lyrics };
+          return newQueue;
+      });
+      showToast(t('lyricsSaved'));
+  };
+
+  const handlePlaySong = (index: number) => {
+    if (index === currentSongIndex) {
+        setIsPlaying(!isPlaying);
+    } else {
+        setCurrentSongIndex(index);
+        setIsPlaying(true);
+        setProgress(0);
+    }
+  };
+
+  // Fix: Moved these useCallback definitions here, before the mediaSession useEffect.
+  // Declare handleSeek first as handleNext/Prev might use it.
+  const handleSeek = useCallback((seconds: number) => {
+    setProgress(seconds);
+    seekYT(seconds);
+  }, [seekYT]);
+
+  const handleNext = useCallback((auto = false) => {
+    if (queue.length === 0) return;
+    if (repeatMode === RepeatMode.ONE && auto) {
+      handleSeek(0);
+      return;
+    }
+    if (currentSongIndex < queue.length - 1) {
+        setCurrentSongIndex(prev => prev + 1);
+    } else if (repeatMode === RepeatMode.ALL) {
+        setCurrentSongIndex(0);
+    } else {
+        setIsPlaying(false);
+        setCurrentSongIndex(-1); // No song playing
+    }
+  }, [currentSongIndex, queue.length, repeatMode, handleSeek]);
+
+  const handlePrev = useCallback(() => {
+    if (progress > 3) { // Restart song if more than 3 seconds in
+        handleSeek(0);
+        setProgress(0);
+    } else if (currentSongIndex > 0) {
+        setCurrentSongIndex(prev => prev - 1);
+    } else if (repeatMode === RepeatMode.ALL) { // Loop back to end
+        setCurrentSongIndex(queue.length - 1);
+    } else {
+        handleSeek(0); // If first song, just restart it
+        setProgress(0);
+    }
+  }, [currentSongIndex, progress, repeatMode, queue.length, handleSeek]);
+
+  // --- MEDIA SESSION API ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentSong) {
       const artwork = currentSong.thumbnailUrl 
@@ -204,7 +322,7 @@ function App() {
         if (details.seekTime || details.seekTime === 0) handleSeek(details.seekTime);
       });
     }
-  }, [currentSong, currentSongIndex, queue]);
+  }, [currentSong, currentSongIndex, queue, handlePrev, handleNext, handleSeek]);
 
   useEffect(() => {
     if ('mediaSession' in navigator) {
@@ -212,154 +330,16 @@ function App() {
     }
   }, [isPlaying]);
 
-
-  // --- YouTube Player Hook ---
-  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, getDuration, isReady: isYTReady } = useYouTubePlayer({
-    onStateChange: (state) => {
-      if (state === 1) {
-             setIsPlaying(true);
-             setPlaybackQuality(audioQuality);
-             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-
-             if (currentSong) {
-                 const realDuration = getDuration ? getDuration() : 0;
-                 if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
-                     updateSongDuration(currentSongIndex, realDuration);
-                 }
-                 if (currentSong.title.startsWith('Loading Video') || !currentSong.artist) {
-                     const data = getVideoData();
-                     if (data && data.title && data.author) {
-                         updateSongMetadata(currentSongIndex, data.title, data.author);
-                     }
-                 }
-             }
-      }
-      if (state === 2) {
-          setIsPlaying(false);
-          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-      }
-      if (state === 0) handleNext(true);
-    },
-    onProgress: (currentTime, duration) => {
-        setProgress(currentTime);
-        if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
-            updateSongDuration(currentSongIndex, duration);
-        }
-    },
-    onError: (e) => {
-        if (e === 150 || e === 101) {
-            showToast("Video Unavailable (Restricted).");
-            setTimeout(() => handleNext(true), 1500);
-        } else {
-            showToast("Error playing video.");
-        }
-    }
-  });
-
-  useEffect(() => {
-      if(isYTReady) {
-          setPlaybackQuality(audioQuality);
-      }
-  }, [audioQuality, isYTReady, setPlaybackQuality]);
-
-  useEffect(() => {
-    if (!currentSong) {
-      if (isYTReady) pauseYT();
-      setIsPlaying(false);
-      setProgress(0);
-      return;
-    }
-    if (isYTReady) {
-       setVolumeYT(volume);
-       loadVideo(currentSong.videoId || '');
-    }
-  }, [currentSong, isYTReady, currentSongIndex, queue]);
-
-  useEffect(() => {
-    if (isYTReady && currentSong) {
-        isPlaying ? playYT() : pauseYT();
-    }
-  }, [isPlaying, currentSong, isYTReady]);
-
-  const updateSongDuration = (index: number, duration: number) => {
-    setQueue(prev => {
-        if (!prev[index]) return prev;
-        if (Math.abs(prev[index].duration - duration) < 1) return prev;
-        const newQueue = [...prev];
-        newQueue[index] = { ...newQueue[index], duration };
-        return newQueue;
-    });
-  };
-
-  const updateSongMetadata = (index: number, title: string, artist: string) => {
-    setQueue(prev => {
-        if (!prev[index]) return prev;
-        const newQueue = [...prev];
-        newQueue[index] = { ...newQueue[index], title, artist, mood: 'YouTube' };
-        return newQueue;
-    });
-  };
-
-  const handleLyricsImport = (lyrics: LyricLine[]) => {
-      if (!currentSong) return;
-      setQueue(prev => {
-          const newQueue = [...prev];
-          newQueue[currentSongIndex] = { ...newQueue[currentSongIndex], lyrics };
-          return newQueue;
-      });
-  };
-
-  const handlePlaySong = (index: number) => {
-    if (index === currentSongIndex) {
-        setIsPlaying(!isPlaying);
-    } else {
-        setCurrentSongIndex(index);
-        setIsPlaying(true);
-        setProgress(0);
-    }
-  };
-
-  const handleNext = useCallback((auto = false) => {
-    if (queue.length === 0) return;
-    if (repeatMode === RepeatMode.ONE && auto) {
-      seekYT(0);
-      return;
-    }
-    if (currentSongIndex < queue.length - 1) {
-        setCurrentSongIndex(prev => prev + 1);
-    } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(0);
-    } else {
-        setIsPlaying(false);
-    }
-  }, [currentSongIndex, queue.length, repeatMode, seekYT]);
-
-  const handlePrev = useCallback(() => {
-    if (progress > 3) {
-        seekYT(0);
-        setProgress(0);
-    } else if (currentSongIndex > 0) {
-        setCurrentSongIndex(prev => prev - 1);
-    } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(queue.length - 1);
-    }
-  }, [currentSongIndex, progress, repeatMode, queue.length, seekYT]);
-
-  const handleSeek = (seconds: number) => {
-    setProgress(seconds);
-    seekYT(seconds);
-  };
-
   const handleImport = (newSongs: Song[]) => {
     const existingIds = new Set(queue.map(s => s.videoId || s.id));
     const uniqueSongs = newSongs.filter(s => !existingIds.has(s.videoId || s.id));
     if (uniqueSongs.length === 0) {
-        showToast("Song already in library.");
+        showToast(t('songExists'));
         return;
     }
     setQueue(prev => [...prev, ...uniqueSongs]);
-    showToast(`Added ${uniqueSongs.length} tracks`);
-    if (queue.length === 0) {
+    showToast(`${t('added')} ${uniqueSongs.length} ${t('tracks')}`);
+    if (queue.length === 0) { // If queue was empty, start playing the first imported song
         setCurrentSongIndex(0);
         setIsPlaying(true);
     }
@@ -369,24 +349,26 @@ function App() {
       const modes = [RepeatMode.NONE, RepeatMode.ALL, RepeatMode.ONE];
       const nextIndex = (modes.indexOf(repeatMode) + 1) % modes.length;
       setRepeatMode(modes[nextIndex]);
-      showToast(`Repeat: ${modes[nextIndex]}`);
+      showToast(`${t('repeatMode')}: ${t(modes[nextIndex].toLowerCase())}`);
   };
 
   const handleRemoveSong = (e: React.MouseEvent, indexToRemove: number) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Prevent playing the song if delete is clicked
     setQueue(prev => prev.filter((_, i) => i !== indexToRemove));
+    
+    // Adjust current song index if needed
     if (indexToRemove < currentSongIndex) {
         setCurrentSongIndex(prev => prev - 1);
     } else if (indexToRemove === currentSongIndex) {
-        if (queue.length === 1) {
+        if (queue.length === 1) { // Last song deleted
             setIsPlaying(false);
             setCurrentSongIndex(-1);
             setProgress(0);
-        } else if (indexToRemove === queue.length - 1) {
+        } else if (indexToRemove === queue.length - 1) { // If last song in queue, play previous
             setCurrentSongIndex(prev => prev - 1);
-            setIsPlaying(false); 
-        }
+        } // If not last and not only song, currentSongIndex remains same, new song will play
     }
+    showToast(t('songRemoved'));
   };
 
   const handleClearAll = () => {
@@ -395,6 +377,7 @@ function App() {
           setCurrentSongIndex(-1);
           setProgress(0);
           setQueue([]);
+          showToast(t('libraryCleared'));
       }
   };
   
@@ -403,10 +386,6 @@ function App() {
     const query = `${currentSong.title} ${currentSong.artist} lyrics`;
     window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
   };
-
-  if (!user) {
-    return <AuthScreen onLogin={handleLogin} />;
-  }
 
   const activeThumbnail = currentSong?.thumbnailUrl || null;
 
@@ -458,29 +437,22 @@ function App() {
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3 pl-2">
             <div className="h-10 w-10 rounded-full bg-[#D0BCFF] flex items-center justify-center text-[#381E72] overflow-hidden">
-                {user.picture ? (
-                    <img src={user.picture} alt="" className="w-full h-full object-cover" />
-                ) : (
-                    <span className="material-symbols-rounded text-2xl">play_circle</span>
-                )}
+               <span className="material-symbols-rounded text-2xl">person_outline</span>
             </div>
             <h1 className="text-xl font-normal tracking-tight text-[#E6E0E9]">Lumina Music</h1>
         </div>
         <div className="flex items-center gap-2">
              <span className="text-sm text-[#CAC4D0] hidden sm:inline-block mr-2">
-                {user.isGuest ? 'Guest' : `Hi, ${user.username.split(' ')[0]}`}
+                {t('guest')}
              </span>
              {deferredPrompt && (
                 <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D0BCFF] text-[#381E72] text-xs font-medium hover:shadow-md animate-pulse">
                     <span className="material-symbols-rounded text-lg">install_mobile</span>
-                    <span className="hidden sm:inline">Install App</span>
+                    <span className="hidden sm:inline">{t('installApp')}</span>
                 </button>
              )}
              <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]" title={t('settings')}>
                 <span className="material-symbols-rounded">settings</span>
-             </button>
-             <button onClick={handleLogout} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#FFB4AB]" title="Log Out">
-                <span className="material-symbols-rounded">logout</span>
              </button>
         </div>
       </header>
@@ -517,13 +489,6 @@ function App() {
                 </button>
             </div>
         </div>
-
-        {isSyncing && (
-             <div className="mb-4 bg-[#2B2930] rounded-xl p-4 flex items-center gap-3 animate-pulse border border-[#D0BCFF]/30">
-                 <span className="material-symbols-rounded text-[#D0BCFF] animate-spin">sync</span>
-                 <p className="text-sm text-[#E6E0E9]">{t('syncing')}</p>
-             </div>
-        )}
 
         <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
@@ -563,7 +528,7 @@ function App() {
                 <div className="py-24 flex flex-col items-center justify-center text-[#CAC4D0] bg-[#1D1B20]/50 rounded-[28px] mt-4 border border-[#49454F]/50 backdrop-blur-sm">
                     <span className="material-symbols-rounded text-6xl mb-4 opacity-50">library_music</span>
                     <p className="text-center max-w-xs mb-6">
-                        {user.isGuest ? t('guestSearch') : t('userSync')}
+                        {t('guestSearch')}
                     </p>
                 </div>
             )}
@@ -582,7 +547,7 @@ function App() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onImport={handleImport}
-        user={user}
+        user={user} // Pass simplified user object
       />
 
       <SettingsModal 
@@ -592,6 +557,8 @@ function App() {
         setAudioQuality={setAudioQuality}
         language={language}
         setLanguage={setLanguage}
+        apiKey={apiKey}
+        onUpdateApiKey={handleUpdateApiKey}
       />
 
       <NowPlayingBar 

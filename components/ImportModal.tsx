@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 import { extractVideoId } from '../utils/youtubeUtils';
 import { searchYouTube, fetchVideoMetadata } from '../services/youtubeService';
 import { Song, User } from '../types';
+import { getTranslation } from '../utils/i18n';
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (songs: Song[]) => void;
-  user: User;
+  user: User; // Simplified user object, primarily for apiKey and isGuest
 }
 
 type Tab = 'SEARCH' | 'URL';
@@ -18,6 +19,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const t = (key: any) => getTranslation(user.apiKey ? 'EN' : 'ES', key); // Use user language or default
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -25,7 +27,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
 
   if (!isOpen) return null;
 
-  const credential = user.accessToken || user.apiKey || undefined;
+  const currentApiKey = user.apiKey; // Use apiKey from simplified user object
 
   // --- SEARCH TAB ---
   const handleSearchSubmit = async (e: React.FormEvent) => {
@@ -36,18 +38,18 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     const potentialVideoId = extractVideoId(searchQuery);
     if (potentialVideoId) {
         setIsLoading(true);
-        setLoadingMessage('Link detected! Fetching video...');
+        setLoadingMessage(t('linkDetected'));
         setError(null);
         try {
-            const metadata = await fetchVideoMetadata(potentialVideoId, credential);
+            const metadata = await fetchVideoMetadata(potentialVideoId, currentApiKey);
             if (metadata) {
                 onImport([metadata]);
                 onClose();
             } else {
-                setError("Could not load video details.");
+                setError(t('couldNotLoadDetails'));
             }
         } catch (err) {
-            setError("Failed to import link.");
+            setError(t('failedToImportLink'));
         } finally {
             setIsLoading(false);
         }
@@ -55,16 +57,16 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     }
 
     setIsLoading(true);
-    setLoadingMessage('Searching YouTube...');
+    setLoadingMessage(currentApiKey ? t('searchingYoutube') : t('searchingMock'));
     setError(null);
     setSearchResults([]);
 
     try {
-      const results = await searchYouTube(searchQuery, credential);
+      const results = await searchYouTube(searchQuery, currentApiKey);
       setSearchResults(results);
-      if (results.length === 0) setError("No results found.");
+      if (results.length === 0) setError(t('noResults'));
     } catch (err) {
-      setError("Search failed.");
+      setError(t('searchFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -85,26 +87,26 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
 
     const videoId = extractVideoId(url);
     if (!videoId) {
-      setError("Invalid YouTube URL. Try a standard link.");
+      setError(t('invalidYoutubeUrl'));
       return;
     }
 
     setIsLoading(true);
-    setLoadingMessage('Fetching details...');
+    setLoadingMessage(t('fetchingDetails'));
     setError(null);
     
     try {
-      const metadata = await fetchVideoMetadata(videoId, credential);
+      const metadata = await fetchVideoMetadata(videoId, currentApiKey);
       // Even if metadata is basic (fallback), we import it
       if (metadata) {
         onImport([metadata]);
         onClose();
       } else {
-        setError("Could not load video details.");
+        setError(t('couldNotLoadDetails'));
       }
     } catch (err) {
       console.error(err);
-      setError("Failed to import.");
+      setError(t('failedToImport'));
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +120,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         <div className="px-6 pt-6 pb-2 text-center relative">
             {/* Drag handle for mobile visual cue */}
             <div className="w-12 h-1.5 bg-[#49454F] rounded-full mx-auto mb-4 sm:hidden"></div>
-            <h2 className="text-2xl font-normal text-[#E6E0E9]">Add Music</h2>
+            <h2 className="text-2xl font-normal text-[#E6E0E9]">{t('addMusic')}</h2>
         </div>
 
         {/* Tabs */}
@@ -129,7 +131,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                     onClick={() => { setActiveTab(tab as Tab); setError(null); }}
                     className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
                 >
-                    {tab.charAt(0) + tab.slice(1).toLowerCase()}
+                    {t(tab.toLowerCase())}
                 </button>
             ))}
         </div>
@@ -142,12 +144,12 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                             value={searchQuery}
                             onChange={(e) => { setSearchQuery(e.target.value); setError(null); }}
                             type="text" 
-                            placeholder={user.isGuest ? "Search..." : "Search YouTube..."}
+                            placeholder={currentApiKey ? t('searchYoutube') : t('searchMockPlaceholder')}
                             className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
                             autoFocus 
                         />
                         <button type="submit" disabled={isLoading} className="bg-[#D0BCFF] text-[#381E72] rounded-full px-5 font-medium hover:opacity-90 flex items-center justify-center">
-                            {isLoading ? <span className="material-symbols-rounded animate-spin">refresh</span> : 'Go'}
+                            {isLoading ? <span className="material-symbols-rounded animate-spin">refresh</span> : t('go')}
                         </button>
                      </form>
                      
@@ -172,7 +174,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
 
             {activeTab === 'URL' && (
                  <form onSubmit={handleYoutubeUrlSubmit} className="flex flex-col gap-4">
-                    <p className="text-[#CAC4D0] text-sm mb-2">Paste a YouTube Link directly.</p>
+                    <p className="text-[#CAC4D0] text-sm mb-2">{t('pasteYoutubeLink')}</p>
                      <div className="group relative">
                          <input 
                             name="url" 
@@ -183,7 +185,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                          />
                      </div>
                      <button type="submit" disabled={isLoading} className="self-end px-6 py-2 rounded-full bg-[#D0BCFF] text-[#381E72] text-sm font-medium disabled:opacity-50 mt-2">
-                        {isLoading ? 'Loading...' : 'Import'}
+                        {isLoading ? t('loading') : t('import')}
                      </button>
                  </form>
             )}
@@ -192,9 +194,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         {/* Footer with Close */}
         <div className="px-6 pb-6 pt-4 border-t border-[#49454F] flex justify-between items-center bg-[#2B2930]">
             <span className="text-xs text-[#CAC4D0]">
-                {user.isGuest ? 'Guest Mode' : <span className="text-[#E6E0E9] truncate max-w-[100px] inline-block align-bottom">{user.username}</span>}
+                {t('guestMode')}
             </span>
-            <button type="button" onClick={onClose} className="px-6 py-2 bg-[#49454F] rounded-full text-[#E6E0E9] text-sm font-medium hover:bg-[#5b5763]">Close</button>
+            <button type="button" onClick={onClose} className="px-6 py-2 bg-[#49454F] rounded-full text-[#E6E0E9] text-sm font-medium hover:bg-[#5b5763]">{t('close')}</button>
         </div>
 
         {error && (

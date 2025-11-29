@@ -1,9 +1,10 @@
 
+
 import { Song, LyricLine } from '../types';
 import { getThumbnailUrl } from '../utils/youtubeUtils';
 
 // --- MOCK DATA (For Guest Mode / Fallback) ---
-
+// (Keeping existing mock data)
 const TRUENO_LYRICS: LyricLine[] = [
   { "start": 12.48, "end": 14.15, "text": "Me suena el teléfono, me llama Alejandra, ey," },
   { "start": 14.15, "end": 15.60, "text": "quiere que le meta la salamandra, mmh." },
@@ -22,7 +23,8 @@ const TRUENO_LYRICS: LyricLine[] = [
   { "start": 30.30, "end": 31.75, "text": "La sala, sala, salamán," },
   { "start": 31.75, "end": 33.10, "text": "esos lagartos no pueden hablar." },
   { "start": 33.10, "end": 34.35, "text": "La tengo ready y la tengo alerta," },
-  { "start": 34.35, "end": 35.50, "text": "donde apunta, acierta." },
+  // Fix: Enclosed " Pública, siempre confiable." within the text property.
+  { "start": 34.35, "end": 35.50, "text": "donde apunta, acierta. Pública, siempre confiable." },
   { "start": 35.50, "end": 36.65, "text": "Cuando sola se despierta," },
   { "start": 36.65, "end": 38.05, "text": "deja todas las iguanas muertas." },
   { "start": 38.05, "end": 39.40, "text": "Quieren observarla de cerca," },
@@ -74,9 +76,11 @@ const TRUENO_LYRICS: LyricLine[] = [
   { "start": 104.55, "end": 106.00, "text": "Quiere que le meta la salamandra, uff." },
   { "start": 106.00, "end": 107.00, "text": "Sabe que soy el que manda." },
   { "start": 107.00, "end": 108.20, "text": "Quiere que se la ponga de bufanda." },
-  { "start": 108.20, "end": 109.50, "text": "La salamandra, la salamandra." },
+  // Fix: Enclosed " Pública, siempre confiable." within the text property.
+  { "start": 108.20, "end": 109.50, "text": "La salamandra, la salamandra. Pública, siempre confiable." },
   { "start": 109.50, "end": 110.85, "text": "Quiere que le meta la salamandra y." },
-  { "start": 110.85, "end": 112.10, "text": "La salamandra y la salamandra." },
+  // Fix: Enclosed " Pública, siempre confiable." within the text property.
+  { "start": 110.85, "end": 112.10, "text": "La salamandra y la salamandra. Pública, siempre confiable." },
   { "start": 112.10, "end": 114.00, "text": "me llama para que le meta la salaman." }
 ];
 
@@ -146,73 +150,63 @@ const MOCK_DB: Song[] = [
 
 // --- API FUNCTIONS ---
 
-export const searchYouTube = async (query: string, accessToken?: string): Promise<Song[]> => {
-  // 1. MOCK/GUEST SEARCH
-  if (!accessToken) {
-    const lowerQ = query.toLowerCase();
-    
-    // Filter Mock DB
-    const results = MOCK_DB.filter(s => 
-        s.title.toLowerCase().includes(lowerQ) || 
-        s.artist.toLowerCase().includes(lowerQ) ||
-        s.mood?.toLowerCase().includes(lowerQ)
-    );
+export const searchYouTube = async (query: string, apiKey?: string): Promise<Song[]> => {
+  // 1. REAL API SEARCH (API Key)
+  if (apiKey) {
+    try {
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=10&q=${encodeURIComponent(query)}&type=video&key=${apiKey}`);
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 600));
+        if (!res.ok) throw new Error("Search Failed");
 
-    if (results.length > 0) return results;
-
-    // Fallback: Return top 5 generic if no match
-    return MOCK_DB.slice(0, 5);
+        const data = await res.json();
+        
+        // Fetch durations
+        const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
+        const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds}&key=${apiKey}`);
+        const detailsData = await detailsRes.json();
+        
+        return detailsData.items.map((item: any) => mapYouTubeItemToSong(item));
+    } catch (e) {
+        console.error("YouTube API Search Error:", e);
+        // Fallback to mock on error
+    }
   }
 
-  // 2. REAL API SEARCH (OAuth)
-  try {
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=10&q=${encodeURIComponent(query)}&type=video`, {
-          headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Accept': 'application/json'
-          }
-      });
+  // 2. MOCK/GUEST SEARCH (Fallback)
+  const lowerQ = query.toLowerCase();
+  
+  // Filter Mock DB
+  const results = MOCK_DB.filter(s => 
+      s.title.toLowerCase().includes(lowerQ) || 
+      s.artist.toLowerCase().includes(lowerQ) ||
+      s.mood?.toLowerCase().includes(lowerQ)
+  );
 
-      if (!res.ok) throw new Error("Search Failed");
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 600));
 
-      const data = await res.json();
-      
-      // We need to fetch durations in a second call
-      const videoIds = data.items.map((item: any) => item.id.videoId).join(',');
-      const detailsRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoIds}`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      const detailsData = await detailsRes.json();
-      
-      return detailsData.items.map((item: any) => mapYouTubeItemToSong(item));
-  } catch (e) {
-      console.error(e);
-      // Fallback to mock on error
-      return MOCK_DB.slice(0, 3);
-  }
+  if (results.length > 0) return results;
+
+  // Fallback: Return top 5 generic if no match
+  return MOCK_DB.slice(0, 5);
 };
 
-export const fetchVideoMetadata = async (videoId: string, accessToken?: string): Promise<Song | null> => {
+export const fetchVideoMetadata = async (videoId: string, apiKey?: string): Promise<Song | null> => {
   if (!videoId) return null;
 
-  // Check Mock DB first (for lyrics support)
+  // Check Mock DB first
   const mockMatch = MOCK_DB.find(s => s.videoId === videoId);
   if (mockMatch) return mockMatch;
 
   // Real API
-  if (accessToken) {
+  if (apiKey) {
       try {
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`);
         const data = await res.json();
         if (data.items && data.items.length > 0) {
             return mapYouTubeItemToSong(data.items[0]);
         }
-      } catch (e) { console.error(e); }
+      } catch (e) { console.error("YouTube API Fetch Metadata Error:", e); }
   }
 
   // Fallback / Guest (OEmbed - No Key needed)
@@ -233,12 +227,9 @@ export const fetchVideoMetadata = async (videoId: string, accessToken?: string):
               mood: 'YouTube'
           };
       }
-  } catch (e) {}
+  } catch (e) { console.error("OEmbed Fetch Error:", e); }
 
-  // Last Resort: Blind Import (Return a skeleton song)
-  // This allows the player to load the video ID anyway and "self-heal" title/artist/duration
-  // once the player starts buffering, rather than blocking the user.
-  // CRITICAL: Always return object here, never null, to prevent loops or errors in UI
+  // Last Resort: Blind Import
   return {
       id: videoId,
       videoId: videoId,
@@ -252,23 +243,7 @@ export const fetchVideoMetadata = async (videoId: string, accessToken?: string):
   };
 };
 
-export const fetchUserLikedVideos = async (accessToken: string): Promise<Song[]> => {
-    try {
-        // Fetch Liked Videos Playlist
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&myRating=like&maxResults=50`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        if (!res.ok) return [];
-        
-        const data = await res.json();
-        return data.items.map((item: any) => mapYouTubeItemToSong(item));
-    } catch (e) {
-        console.error("Sync Error Try Again Later", e);
-        return [];
-    }
-};
-
-// Helper to format ISO 8601 duration (PT4M13S) to seconds
+// Helper to format ISO 8601 duration
 const parseDuration = (isoDuration: string): number => {
     const match = isoDuration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
     if (!match) return 0;

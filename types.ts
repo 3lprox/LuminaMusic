@@ -1,12 +1,8 @@
 
 export interface User {
-  username: string;
-  email?: string;
-  picture?: string;
-  accessToken?: string; // OAuth Token
-  clientId?: string; // Stored for session
-  isGuest?: boolean;
-  apiKey?: string; // Deprecated/Optional
+  username: string; // Will always be "Guest" now
+  apiKey?: string; // Optional YouTube Data API Key
+  isGuest: boolean; // Will always be true
 }
 
 export interface LyricLine {
@@ -58,6 +54,5 @@ declare global {
   interface Window {
     YT: any;
     onYouTubeIframeAPIReady: () => void;
-    google: any; // GIS
   }
 }

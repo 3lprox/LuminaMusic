@@ -10,9 +10,11 @@ interface SettingsModalProps {
   setAudioQuality: (q: AudioQuality) => void;
   language: Language;
   setLanguage: (l: Language) => void;
+  apiKey?: string;
+  onUpdateApiKey: (key: string | undefined) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, audioQuality, setAudioQuality, language, setLanguage }) => {
+const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, audioQuality, setAudioQuality, language, setLanguage, apiKey, onUpdateApiKey }) => {
   if (!isOpen) return null;
 
   const t = (key: any) => getTranslation(language, key);
@@ -20,20 +22,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, audioQua
   const options: { value: AudioQuality; label: string; description: string; icon: string }[] = [
     { 
       value: 'LOW', 
-      label: 'Baja (Ahorro de datos)', 
-      description: 'Consume menos datos, carga más rápido.',
+      label: t('lowData'), 
+      description: t('lowDataDesc'),
       icon: 'data_saver_on'
     },
     { 
       value: 'NORMAL', 
-      label: 'Normal', 
-      description: 'Equilibrio estándar.',
+      label: t('normalQuality'), 
+      description: t('normalQualityDesc'),
       icon: 'equalizer'
     },
     { 
       value: 'HIGH', 
-      label: 'Alta (Máxima fidelidad)', 
-      description: 'Mejor experiencia auditiva.',
+      label: t('highQuality'), 
+      description: t('highQualityDesc'),
       icon: 'high_quality'
     }
   ];
@@ -69,6 +71,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, audioQua
                      </button>
                  </div>
             </div>
+
+            {/* YouTube API Key Section */}
+            <div>
+                <h3 className="text-sm font-medium text-[#D0BCFF] mb-3 uppercase tracking-wider">{t('youtubeApiKey')}</h3>
+                <div className="relative group text-left mb-2">
+                    <input 
+                        type="text" 
+                        value={apiKey || ''}
+                        onChange={(e) => onUpdateApiKey(e.target.value || undefined)}
+                        placeholder={t('apiKeyPlaceholder')}
+                        className="w-full bg-[#141218] border border-[#938F99] rounded-[12px] px-4 py-3 text-[#E6E0E9] text-sm font-mono outline-none focus:border-[#D0BCFF] transition-all"
+                    />
+                </div>
+                <p className="text-[10px] text-[#CAC4D0]">{t('apiKeyDesc')}</p>
+            </div>
+
 
             {/* Audio Quality Section */}
             <div>
