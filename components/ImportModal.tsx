@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { extractVideoId } from '../utils/youtubeUtils';
-import { searchYouTube, fetchVideoMetadata } from '../services/youtubeService';
+import { extractVideoId, extractPlaylistId } from '../utils/youtubeUtils';
+import { searchYouTube, fetchVideoMetadata, fetchPlaylistItems } from '../services/youtubeService';
 import { Song, User } from '../types';
 import { getTranslation } from '../utils/i18n';
 
@@ -9,7 +9,7 @@ interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (songs: Song[]) => void;
-  user: User; // Simplified user object, primarily for apiKey and isGuest
+  user: User;
 }
 
 type Tab = 'SEARCH' | 'URL';
@@ -19,23 +19,38 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const t = (key: any) => getTranslation(user.apiKey ? 'EN' : 'ES', key); // Use user language or default
+  const t = (key: any) => getTranslation(user.apiKey ? 'EN' : 'ES', key);
 
-  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
 
   if (!isOpen) return null;
+  const currentApiKey = user.apiKey;
 
-  const currentApiKey = user.apiKey; // Use apiKey from simplified user object
-
-  // --- SEARCH TAB ---
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    // SMART SEARCH: If user pastes a URL, auto-switch to import logic
+    // SMART SEARCH: Detect URL
+    const potentialPlaylistId = extractPlaylistId(searchQuery);
     const potentialVideoId = extractVideoId(searchQuery);
+
+    if (potentialPlaylistId && currentApiKey) {
+        setIsLoading(true);
+        setLoadingMessage(t('fetchingPlaylist'));
+        try {
+            const songs = await fetchPlaylistItems(potentialPlaylistId, currentApiKey);
+            if (songs.length > 0) {
+                onImport(songs);
+                onClose();
+            } else {
+                setError("No songs found in playlist or invalid key.");
+            }
+        } catch(e) { setError("Failed to load playlist."); }
+        finally { setIsLoading(false); }
+        return;
+    }
+
     if (potentialVideoId) {
         setIsLoading(true);
         setLoadingMessage(t('linkDetected'));
@@ -45,14 +60,9 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
             if (metadata) {
                 onImport([metadata]);
                 onClose();
-            } else {
-                setError(t('couldNotLoadDetails'));
-            }
-        } catch (err) {
-            setError(t('failedToImportLink'));
-        } finally {
-            setIsLoading(false);
-        }
+            } else { setError(t('couldNotLoadDetails')); }
+        } catch (err) { setError(t('failedToImportLink')); } 
+        finally { setIsLoading(false); }
         return;
     }
 
@@ -77,13 +87,26 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     onClose();
   };
 
-  // --- URL TAB ---
   const handleYoutubeUrlSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const url = String(formData.get('url') || '').trim();
-
     if (!url) return;
+
+    // Check Playlist
+    const playlistId = extractPlaylistId(url);
+    if (playlistId && currentApiKey) {
+        setIsLoading(true);
+        setLoadingMessage(t('fetchingPlaylist'));
+        try {
+            const songs = await fetchPlaylistItems(playlistId, currentApiKey);
+            if (songs.length > 0) {
+                onImport(songs);
+                onClose();
+                return;
+            }
+        } catch(e) {}
+    }
 
     const videoId = extractVideoId(url);
     if (!videoId) {
@@ -97,7 +120,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     
     try {
       const metadata = await fetchVideoMetadata(videoId, currentApiKey);
-      // Even if metadata is basic (fallback), we import it
       if (metadata) {
         onImport([metadata]);
         onClose();
@@ -105,7 +127,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         setError(t('couldNotLoadDetails'));
       }
     } catch (err) {
-      console.error(err);
       setError(t('failedToImport'));
     } finally {
       setIsLoading(false);
@@ -116,14 +137,11 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm sm:p-4">
       <div className="w-full sm:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-[28px] sm:rounded-[28px] bg-[#2B2930] shadow-2xl elevation-3 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
         
-        {/* Header */}
         <div className="px-6 pt-6 pb-2 text-center relative">
-            {/* Drag handle for mobile visual cue */}
             <div className="w-12 h-1.5 bg-[#49454F] rounded-full mx-auto mb-4 sm:hidden"></div>
             <h2 className="text-2xl font-normal text-[#E6E0E9]">{t('addMusic')}</h2>
         </div>
 
-        {/* Tabs */}
         <div className="flex px-4 border-b border-[#49454F]">
             {['SEARCH', 'URL'].map((tab) => (
                 <button 
@@ -155,7 +173,6 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                      
                      <div className="flex flex-col gap-2 mt-2">
                         {isLoading && <p className="text-center text-[#CAC4D0] animate-pulse">{loadingMessage}</p>}
-                        
                         {searchResults.map((song) => (
                             <div key={song.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[#E6E0E9]/5 group active:bg-[#E6E0E9]/10">
                                 <img src={song.thumbnailUrl} className="w-16 h-10 object-cover rounded-md bg-[#49454F]" alt="" />
@@ -191,11 +208,8 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
             )}
         </div>
         
-        {/* Footer with Close */}
         <div className="px-6 pb-6 pt-4 border-t border-[#49454F] flex justify-between items-center bg-[#2B2930]">
-            <span className="text-xs text-[#CAC4D0]">
-                {t('guestMode')}
-            </span>
+            <span className="text-xs text-[#CAC4D0]">{t('guestMode')}</span>
             <button type="button" onClick={onClose} className="px-6 py-2 bg-[#49454F] rounded-full text-[#E6E0E9] text-sm font-medium hover:bg-[#5b5763]">{t('close')}</button>
         </div>
 

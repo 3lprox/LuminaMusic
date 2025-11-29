@@ -27,6 +27,7 @@ export interface Song {
   colorHex?: string;
   summary?: string;
   lyrics?: LyricLine[];
+  lyricsOffset?: number; // Adjustment in seconds
 }
 
 export type AudioQuality = 'LOW' | 'NORMAL' | 'HIGH';

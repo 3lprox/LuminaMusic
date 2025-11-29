@@ -14,6 +14,7 @@ interface NowPlayingBarProps {
   onGoogleSearch: () => void;
   onToggleVideo: () => void;
   isVideoMode: boolean;
+  onShuffle: () => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -34,7 +35,8 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
   onToggleLyrics,
   onGoogleSearch,
   onToggleVideo,
-  isVideoMode
+  isVideoMode,
+  onShuffle
 }) => {
   const { currentSong, isPlaying, progress, volume, repeatMode } = playerState;
   const [localProgress, setLocalProgress] = useState(progress);
@@ -65,15 +67,13 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
       
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 py-3 flex flex-col gap-2">
         
-        {/* Progress Bar (Top of player) */}
+        {/* Progress Bar */}
         <div className="flex items-center gap-3 w-full -mt-1 sm:mt-0">
              <span className="text-xs font-medium text-[#CAC4D0] w-8 text-right hidden sm:block">{formatTime(localProgress)}</span>
              <div className="relative flex-1 h-8 sm:h-6 flex items-center group touch-none">
-                {/* Background Track */}
                 <div className="absolute w-full h-1 bg-[#49454F] rounded-full overflow-hidden">
                     <div className="h-full bg-[#D0BCFF] transition-all duration-100 ease-linear" style={{ width: `${(localProgress / (currentSong.duration || 1)) * 100}%` }} />
                 </div>
-                {/* Touch Area & Slider */}
                 <input 
                     type="range" min={0} max={currentSong.duration || 100} value={localProgress}
                     onChange={handleSeekChange} 
@@ -87,16 +87,14 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
             <span className="text-xs font-medium text-[#CAC4D0] w-8 hidden sm:block">{formatTime(currentSong.duration)}</span>
         </div>
         
-        {/* Mobile Time Indicator (Below progress bar) */}
         <div className="flex justify-between sm:hidden px-1 -mt-2 mb-1">
              <span className="text-[10px] text-[#CAC4D0]">{formatTime(localProgress)}</span>
              <span className="text-[10px] text-[#CAC4D0]">{formatTime(currentSong.duration)}</span>
         </div>
 
-        {/* Main Controls Row */}
+        {/* Controls */}
         <div className="flex items-center justify-between gap-3 sm:gap-4">
             
-            {/* Track Info */}
             <div className="flex items-center gap-3 flex-1 min-w-0 max-w-[60%] sm:max-w-none">
                 <img 
                     src={currentSong.thumbnailUrl} alt="Album Art" 
@@ -108,8 +106,10 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 </div>
             </div>
 
-            {/* Playback Controls */}
             <div className="flex items-center gap-1 sm:gap-4">
+                <button onClick={onShuffle} className="hidden sm:block text-[#CAC4D0] hover:text-[#E6E0E9] p-2 rounded-full hover:bg-[#E6E0E9]/10" title="Shuffle">
+                    <span className="material-symbols-rounded text-xl">shuffle</span>
+                </button>
                 <button onClick={onPrev} className="text-[#CAC4D0] hover:text-[#E6E0E9] p-2 rounded-full hover:bg-[#E6E0E9]/10">
                     <span className="material-symbols-rounded text-2xl sm:text-2xl">skip_previous</span>
                 </button>
@@ -126,9 +126,7 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 </button>
             </div>
 
-            {/* Volume & Repeat (Desktop/Tablet) */}
             <div className="hidden sm:flex items-center gap-2 flex-1 justify-end">
-                {/* Volume */}
                 <div className="group flex items-center gap-2 mr-2">
                     <span className="material-symbols-rounded text-[#CAC4D0] text-xl">volume_up</span>
                     <input 
@@ -162,10 +160,9 @@ const NowPlayingBar: React.FC<NowPlayingBarProps> = ({
                 </button>
             </div>
             
-            {/* Mobile Actions (Compact) */}
             <div className="sm:hidden flex items-center -mr-2">
-                <button onClick={onToggleVideo} className={`p-2 ${isVideoMode ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
-                    <span className="material-symbols-rounded text-2xl">smart_display</span>
+                <button onClick={onShuffle} className="p-2 text-[#CAC4D0]">
+                    <span className="material-symbols-rounded text-2xl">shuffle</span>
                 </button>
                 <button onClick={onToggleLyrics} className={`p-2 ${currentSong.lyrics ? 'text-[#D0BCFF]' : 'text-[#CAC4D0]'}`}>
                     <span className="material-symbols-rounded text-2xl">mic</span>
