@@ -42,12 +42,29 @@ export interface PlayerState {
   queue: Song[];
   repeatMode: RepeatMode;
   audioQuality: AudioQuality;
+  isShuffled?: boolean;
 }
 
 export enum RepeatMode {
   NONE = 'NONE',
   ALL = 'ALL',
   ONE = 'ONE',
+}
+
+export interface PersistedState {
+  queue: Song[];
+  volume: number;
+  repeatMode: RepeatMode;
+  audioQuality: AudioQuality;
+  language: Language;
+  
+  // Power User Features
+  customJs?: string;
+  customCss?: string;
+  discordWebhook?: string;
+  customEndpoint?: string;
+  forceHttps?: boolean;
+  showStats?: boolean;
 }
 
 // Global window type for YouTube IFrame API

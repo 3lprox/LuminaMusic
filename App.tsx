@@ -7,6 +7,7 @@ import NowPlayingBar from './components/NowPlayingBar';
 import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
 import SettingsModal from './components/SettingsModal';
+import StatsForNerds from './components/StatsForNerds';
 import { saveState, loadState, saveApiKey, loadApiKey } from './utils/storage';
 import { DEFAULT_SONG } from './services/youtubeService';
 import { getTranslation } from './utils/i18n';
@@ -24,7 +25,15 @@ function App() {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [audioQuality, setAudioQuality] = useState<AudioQuality>('NORMAL');
-  const [language, setLanguage] = useState<Language>('EN'); // Default EN
+  const [language, setLanguage] = useState<Language>('EN');
+  
+  // Power User State
+  const [customJs, setCustomJs] = useState('');
+  const [customCss, setCustomCss] = useState('');
+  const [discordWebhook, setDiscordWebhook] = useState('');
+  const [customEndpoint, setCustomEndpoint] = useState('');
+  const [forceHttps, setForceHttps] = useState(true);
+  const [showStats, setShowStats] = useState(false);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLyricsOpen, setIsLyricsOpen] = useState(false);
@@ -50,8 +59,40 @@ function App() {
     if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
     if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
     if (saved.language !== undefined) setLanguage(saved.language);
+    
+    if (saved.customJs) setCustomJs(saved.customJs);
+    if (saved.customCss) setCustomCss(saved.customCss);
+    if (saved.discordWebhook) setDiscordWebhook(saved.discordWebhook);
+    if (saved.customEndpoint) setCustomEndpoint(saved.customEndpoint);
+    if (saved.forceHttps !== undefined) setForceHttps(saved.forceHttps);
+    if (saved.showStats !== undefined) setShowStats(saved.showStats);
+
     setHasLoadedState(true);
   }, []);
+
+  // Injection Effect
+  useEffect(() => {
+    if (!hasLoadedState) return;
+    
+    // CSS
+    const styleId = 'lumina-custom-css';
+    let styleTag = document.getElementById(styleId);
+    if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = styleId;
+        document.head.appendChild(styleTag);
+    }
+    styleTag.textContent = customCss;
+
+    // JS (Execute safely?)
+    if (customJs) {
+        try {
+            // eslint-disable-next-line no-new-func
+            const func = new Function(customJs);
+            func();
+        } catch(e) { console.error("Injection Error:", e); }
+    }
+  }, [customCss, customJs, hasLoadedState]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -77,13 +118,32 @@ function App() {
 
   useEffect(() => {
     if (hasLoadedState) {
-      saveState(queue, volume, repeatMode, audioQuality, language);
+      saveState(queue, volume, repeatMode, audioQuality, language, customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats);
     }
-  }, [queue, volume, repeatMode, audioQuality, language, hasLoadedState]);
+  }, [queue, volume, repeatMode, audioQuality, language, hasLoadedState, customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats]);
 
   const showToast = (msg: string) => {
       setToastMessage(msg);
       setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleDownloadSource = () => {
+      const source = {
+          config: {
+              language, audioQuality, apiKey, customJs, customCss, discordWebhook, customEndpoint, showStats
+          },
+          library: queue
+      };
+      const dataStr = JSON.stringify(source, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = "lumina_source_config.json";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(t('sourceDownloaded'));
   };
 
   const handleExportData = () => {
@@ -108,7 +168,17 @@ function App() {
     reader.onload = (event) => {
         try {
             const importedData = JSON.parse(event.target?.result as string);
-            if (Array.isArray(importedData)) {
+            // Check if it's a Source Config
+            if (importedData.config && importedData.library) {
+                setQueue(importedData.library);
+                setCustomJs(importedData.config.customJs || '');
+                setCustomCss(importedData.config.customCss || '');
+                setDiscordWebhook(importedData.config.discordWebhook || '');
+                setShowStats(importedData.config.showStats || false);
+                showToast("Source Config Restored!");
+            }
+            // Or just library
+            else if (Array.isArray(importedData)) {
                 const existingIds = new Set(queue.map(s => s.id));
                 const uniqueNew = importedData.filter((s: Song) => !existingIds.has(s.id));
                 if (uniqueNew.length > 0) {
@@ -123,6 +193,27 @@ function App() {
   };
 
   const currentSong = currentSongIndex >= 0 ? queue[currentSongIndex] : null;
+
+  // Discord Webhook Trigger
+  useEffect(() => {
+      if (currentSong && discordWebhook) {
+          try {
+              fetch(discordWebhook, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({
+                      content: `Now Playing on Lumina Music: **${currentSong.title}** by ${currentSong.artist}`,
+                      embeds: [{
+                          title: currentSong.title,
+                          description: currentSong.artist,
+                          thumbnail: { url: currentSong.thumbnailUrl },
+                          color: 13680639
+                      }]
+                  })
+              }).catch(e => console.error("Discord webhook failed", e));
+          } catch(e) {}
+      }
+  }, [currentSong, discordWebhook]);
 
   const handleSeek = useCallback((seconds: number) => {
     setProgress(seconds);
@@ -251,36 +342,28 @@ function App() {
     }
   };
 
-  // SHUFFLE: Randomize queue starting after current song
   const handleShuffle = () => {
     if (queue.length <= 1) return;
     const current = queue[currentSongIndex];
     const rest = queue.filter((_, i) => i !== currentSongIndex);
-    
-    // Fisher-Yates
     for (let i = rest.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    
     setQueue(currentSongIndex >= 0 ? [current, ...rest] : rest);
     setCurrentSongIndex(currentSongIndex >= 0 ? 0 : -1);
     showToast("Queue Shuffled");
   };
 
-  // REORDER (Drag & Drop)
   const handleReorder = (dragIndex: number, dropIndex: number) => {
       if (dragIndex === dropIndex) return;
       setQueue(prev => {
           const updated = [...prev];
           const [moved] = updated.splice(dragIndex, 1);
           updated.splice(dropIndex, 0, moved);
-          
-          // Fix current index
           if (currentSongIndex === dragIndex) setCurrentSongIndex(dropIndex);
           else if (currentSongIndex > dragIndex && currentSongIndex <= dropIndex) setCurrentSongIndex(currentSongIndex - 1);
           else if (currentSongIndex < dragIndex && currentSongIndex >= dropIndex) setCurrentSongIndex(currentSongIndex + 1);
-          
           return updated;
       });
   };
@@ -361,6 +444,7 @@ function App() {
     <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
       <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".json" className="hidden" />
 
+      {/* Background */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
            <div className="absolute inset-0 bg-[#141218]" />
            {activeThumbnail && (
@@ -371,6 +455,10 @@ function App() {
            <div className="absolute inset-0 bg-gradient-to-b from-[#141218]/60 via-[#141218]/80 to-[#141218]" />
       </div>
 
+      {/* Stats Overlay */}
+      {showStats && <StatsForNerds currentSong={currentSong} volume={volume} videoMode={isVideoMode} />}
+
+      {/* YouTube Player */}
       <div className={`transition-all duration-300 ease-in-out ${isVideoMode ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-0 pointer-events-none'}`}>
           <style>{`#youtube-player-hidden { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }`}</style>
           <div id="youtube-player-hidden" className="w-full h-full" />
@@ -476,7 +564,24 @@ function App() {
       />
 
       <ImportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onImport={handleImport} user={user} />
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} audioQuality={audioQuality} setAudioQuality={setAudioQuality} language={language} setLanguage={setLanguage} apiKey={apiKey} onUpdateApiKey={handleUpdateApiKey} />
+      
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)} 
+        audioQuality={audioQuality} setAudioQuality={setAudioQuality} 
+        language={language} setLanguage={setLanguage} 
+        apiKey={apiKey} onUpdateApiKey={handleUpdateApiKey}
+        
+        customJs={customJs} setCustomJs={setCustomJs}
+        customCss={customCss} setCustomCss={setCustomCss}
+        showStats={showStats} setShowStats={setShowStats}
+        
+        discordWebhook={discordWebhook} setDiscordWebhook={setDiscordWebhook}
+        customEndpoint={customEndpoint} setCustomEndpoint={setCustomEndpoint}
+        forceHttps={forceHttps} setForceHttps={setForceHttps}
+        
+        onDownloadSource={handleDownloadSource}
+      />
       
       <NowPlayingBar 
         playerState={{ currentSong, isPlaying, progress, volume, isMuted: volume === 0, queue, repeatMode, audioQuality }}
