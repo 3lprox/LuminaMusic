@@ -57,6 +57,9 @@ export const useYouTubePlayer = ({ onStateChange, onProgress, onError }: UseYouT
         'disablekb': 1,
         'origin': window.location.origin,
         'autoplay': 1,
+        'cc_load_policy': 0, // Force captions OFF
+        'iv_load_policy': 3, // Force annotations OFF
+        'fs': 0,
       },
       events: {
         'onReady': onPlayerReady,

@@ -205,6 +205,8 @@ export const searchYouTube = async (query: string, accessToken?: string): Promis
 };
 
 export const fetchVideoMetadata = async (videoId: string, accessToken?: string): Promise<Song | null> => {
+  if (!videoId) return null;
+
   // Check Mock DB first (for lyrics support)
   const mockMatch = MOCK_DB.find(s => s.videoId === videoId);
   if (mockMatch) return mockMatch;

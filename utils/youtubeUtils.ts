@@ -1,13 +1,21 @@
+
 export const extractVideoId = (url: string): string | null => {
-  // Supports:
-  // youtube.com/watch?v=ID
-  // youtu.be/ID
-  // youtube.com/shorts/ID
-  // youtube.com/embed/ID
-  // Handle list and other parameters by ignoring everything after the ID
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
+  if (!url) return null;
+  
+  // 1. Decode URL (handles cases like watch%3Fv%3D...)
+  let decodedUrl = url;
+  try {
+    decodedUrl = decodeURIComponent(url);
+  } catch (e) {
+    // If decode fails, use original
+  }
+
+  // 2. Handle YouTube Music, Shorts, Embeds, standard Watch
+  // Regex looks for 11 char ID after specific prefixes
+  const regExp = /(?:https?:\/\/)?(?:www\.|music\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+  
+  const match = decodedUrl.match(regExp);
+  return (match && match[1]) ? match[1] : null;
 };
 
 export const getThumbnailUrl = (videoId: string): string => {
@@ -16,9 +24,15 @@ export const getThumbnailUrl = (videoId: string): string => {
 
 // Extracts all unique video IDs from a block of text (for playlist/batch import)
 export const extractVideoIdsFromText = (text: string): string[] => {
-  // Updated to include shorts in batch extraction
-  const regex = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/g;
-  const matches = [...text.matchAll(regex)];
-  // Return unique IDs
-  return Array.from(new Set(matches.map(m => m[1])));
+  const ids = new Set<string>();
+  
+  // Split by whitespace/newlines to handle each "word" as a potential URL
+  const tokens = text.split(/[\s\n]+/);
+  
+  for (const token of tokens) {
+      const id = extractVideoId(token);
+      if (id) ids.add(id);
+  }
+  
+  return Array.from(ids);
 };

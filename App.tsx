@@ -307,15 +307,16 @@ function App() {
 
       {/* 
         YouTube Player Container Logic 
-        - Default (Audio Mode): Positioned "in view" but invisible (opacity 0.01, z-index -50).
-          This prevents YouTube from pausing playback due to "background/hidden" detection.
-        - Video Mode: Fixed inset-0, z-index high, fully opaque.
+        - Default (Audio Mode): Positioned bottom-right but BEHIND content.
+          Using z-0 with relative main content z-10 makes it functionally "background"
+          but technically "visible" in the viewport stack, fixing the 1-second pause bug.
+        - Video Mode: Fixed inset-0, z-20 (above everything).
       */}
       <div 
         className={`transition-all duration-300 ease-in-out
             ${isVideoMode 
                 ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' 
-                : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-[-50] pointer-events-none'
+                : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-0 pointer-events-none'
             }
         `}
       >
