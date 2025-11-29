@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Song, RepeatMode, LyricLine, User, AudioQuality } from './types';
 import { useYouTubePlayer } from './hooks/useYouTubePlayer';
@@ -8,6 +7,7 @@ import SongListItem from './components/SongListItem';
 import LyricsOverlay from './components/LyricsOverlay';
 import AuthScreen from './components/AuthScreen';
 import SettingsModal from './components/SettingsModal';
+// Explicit relative import to avoid alias issues
 import { saveState, loadState, loadUser, saveUser } from './utils/storage';
 import { fetchUserLikedVideos, DEFAULT_SONG } from './services/youtubeService';
 
