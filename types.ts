@@ -1,8 +1,11 @@
 
+
 export interface User {
-  username: string; // Will always be "Guest" now
+  username: string; // Will always be "Guest" or Discord Username
   apiKey?: string; // Optional YouTube Data API Key
-  isGuest: boolean; // Will always be true
+  isGuest: boolean;
+  discordUserId?: string;
+  discordUsername?: string;
 }
 
 export interface LyricLine {
@@ -57,7 +60,14 @@ export interface PersistedState {
   repeatMode: RepeatMode;
   audioQuality: AudioQuality;
   language: Language;
-  
+  primaryColor: string; // New: Hex color for theme
+
+  // Discord Integration
+  discordClientId?: string; // New: To identify app for OAuth
+  discordAccessToken?: string; // Stored for session
+  discordUserId?: string; // New: To identify user for local storage
+  discordUsername?: string; // New: For display
+
   // Power User Features
   customJs?: string;
   customCss?: string;

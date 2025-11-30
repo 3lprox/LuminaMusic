@@ -1,8 +1,10 @@
 
+
 import React, { useEffect, useRef, useState } from 'react';
-import { Song, LyricLine } from '../types';
+import { Song, LyricLine } from '../types'; // CORRECTED: Path from components/ to root/
 import { fetchVideoDescription } from '../services/youtubeService';
-import { parseLyricsFromDescription } from '../utils/youtubeUtils';
+import { parseLyricsFromDescription } from '../utils/youtubeUtils'; // CORRECTED: Path from components/ to utils/
+import { getTranslation } from '../utils/i18n'; // CORRECTED: Path from components/ to utils/
 
 interface LyricsOverlayProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface LyricsOverlayProps {
   currentTime: number;
   onImportLyrics: (lyrics: LyricLine[], offset: number) => void;
   apiKey?: string;
+  t: (key: string) => string; // Pass translation function
 }
 
 type Mode = 'VIEW' | 'EDIT' | 'IMPORT';
@@ -22,7 +25,8 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
   currentSong, 
   currentTime,
   onImportLyrics,
-  apiKey
+  apiKey,
+  t
 }) => {
   const [mode, setMode] = useState<Mode>('VIEW');
   const [activeLineIndex, setActiveLineIndex] = useState<number>(-1);
@@ -55,12 +59,10 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
     let index = -1;
     for (let i = 0; i < currentSong.lyrics.length; i++) {
       const line = currentSong.lyrics[i];
-      if (adjustedTime >= line.start) {
-          const nextLine = currentSong.lyrics[i+1];
-          if (!nextLine || adjustedTime < nextLine.start) {
-              index = i;
-              break;
-          }
+      // Check if current time is >= line start AND either it's the last line OR current time is < next line's start
+      if (adjustedTime >= line.start && (!currentSong.lyrics[i+1] || adjustedTime < currentSong.lyrics[i+1].start)) {
+          index = i;
+          break;
       }
     }
     setActiveLineIndex(index);
@@ -70,7 +72,14 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
     if (mode === 'VIEW' && activeLineIndex >= 0 && scrollRef.current) {
       const activeEl = scrollRef.current.children[activeLineIndex] as HTMLElement;
       if (activeEl) {
-        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // More robust scrollIntoView with check for visibility
+        const containerRect = scrollRef.current.getBoundingClientRect();
+        const elementRect = activeEl.getBoundingClientRect();
+        
+        // Only scroll if element is not fully in view
+        if (elementRect.top < containerRect.top || elementRect.bottom > containerRect.bottom) {
+          activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
       }
     }
   }, [activeLineIndex, mode]);
@@ -92,9 +101,9 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
               setEditedLyrics(parsed);
               setMode('EDIT');
           } else {
-              setError("No lyrics found in description.");
+              setError(t('noLyricsDesc'));
           }
-      } catch (e) { setError("Failed to fetch."); }
+      } catch (e) { setError(t('failedToFetch')); }
       finally { setIsFetching(false); }
   }
 
@@ -130,12 +139,12 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
         <div className="text-center max-w-[60%]">
             <h3 className="text-[#E6E0E9] text-base font-medium truncate">{currentSong.title}</h3>
             <div className="flex items-center justify-center gap-2">
-                <p className="text-[#CAC4D0] text-xs truncate">{mode === 'VIEW' ? 'Lyrics' : mode === 'EDIT' ? 'Editing' : 'Import'}</p>
+                <p className="text-[#CAC4D0] text-xs truncate">{mode === 'VIEW' ? t('lyrics') : mode === 'EDIT' ? t('editing') : t('import')}</p>
                 {mode === 'VIEW' && (
                     <div className="flex items-center bg-[#2B2930] rounded-full px-2 py-0.5 gap-2">
-                        <button onClick={() => setOffset(o => o - 0.5)} className="text-[#CAC4D0] hover:text-[#D0BCFF] text-[10px]">-0.5s</button>
-                        <span className="text-[10px] text-[#E6E0E9]">{offset > 0 ? '+' : ''}{offset}s</span>
-                        <button onClick={() => setOffset(o => o + 0.5)} className="text-[#CAC4D0] hover:text-[#D0BCFF] text-[10px]">+0.5s</button>
+                        <button onClick={() => setOffset(o => parseFloat((o - 0.5).toFixed(1)))} className="text-[#CAC4D0] hover:text-primary text-[10px]">-0.5s</button>
+                        <span className="text-[10px] text-[#E6E0E9]">{offset > 0 ? '+' : ''}{offset.toFixed(1)}s</span>
+                        <button onClick={() => setOffset(o => parseFloat((o + 0.5).toFixed(1)))} className="text-[#CAC4D0] hover:text-primary text-[10px]">+0.5s</button>
                     </div>
                 )}
             </div>
@@ -143,13 +152,13 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
         
         <div className="flex items-center gap-2">
            {mode === 'VIEW' && (
-             <button onClick={() => { setEditedLyrics(currentSong.lyrics || []); setMode('EDIT'); }} className="p-2 text-[#D0BCFF] bg-[#D0BCFF]/10 rounded-full hover:bg-[#D0BCFF]/20">
+             <button onClick={() => { setEditedLyrics(currentSong.lyrics || []); setMode('EDIT'); }} className="p-2 text-primary bg-primary/10 rounded-full hover:bg-primary/20">
                 <span className="material-symbols-rounded text-xl">edit</span>
              </button>
            )}
            {mode === 'EDIT' && (
-              <button onClick={saveEdits} className="px-4 py-1.5 bg-[#D0BCFF] text-[#381E72] rounded-full text-sm font-medium hover:shadow-lg">
-                Save
+              <button onClick={saveEdits} className="px-4 py-1.5 bg-primary text-on-primary rounded-full text-sm font-medium hover:shadow-lg">
+                {t('save')}
               </button>
            )}
         </div>
@@ -171,8 +180,8 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
             })}
             {(!currentSong.lyrics || currentSong.lyrics.length === 0) && (
                  <div className="flex flex-col items-center justify-center h-full pb-32">
-                    <p className="text-[#CAC4D0] mb-4">No lyrics found.</p>
-                    <button onClick={() => setMode('IMPORT')} className="text-[#D0BCFF] underline">Add Lyrics</button>
+                    <p className="text-[#CAC4D0] mb-4">{t('noLyricsFound')}</p>
+                    <button onClick={() => setMode('IMPORT')} className="text-primary underline">{t('addLyrics')}</button>
                  </div>
             )}
            </div>
@@ -181,16 +190,16 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
         {mode === 'EDIT' && (
            <div className="w-full max-w-3xl mx-auto h-full overflow-y-auto p-4 sm:p-6 pb-24">
               <div className="flex justify-end mb-4">
-                  <button onClick={addLine} className="flex items-center gap-2 text-[#D0BCFF] text-sm hover:bg-[#D0BCFF]/10 px-3 py-1.5 rounded-lg transition-colors">
-                      <span className="material-symbols-rounded text-lg">add</span> Add Line
+                  <button onClick={addLine} className="flex items-center gap-2 text-primary text-sm hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">
+                      <span className="material-symbols-rounded text-lg">add</span> {t('addLine')}
                   </button>
               </div>
               <div className="space-y-2">
                   {editedLyrics.map((line, idx) => (
                       <div key={idx} className="flex items-center gap-2 group animate-in fade-in slide-in-from-bottom-2 duration-300">
-                          <input type="number" value={line.start} step="0.1" onChange={(e) => updateLine(idx, 'start', parseFloat(e.target.value))} className="w-16 sm:w-20 bg-[#2B2930] text-[#D0BCFF] text-right font-mono text-xs sm:text-sm p-3 rounded-[12px] outline-none" />
+                          <input type="number" value={line.start} step="0.1" onChange={(e) => updateLine(idx, 'start', parseFloat(e.target.value))} className="w-16 sm:w-20 bg-[#2B2930] text-primary text-right font-mono text-xs sm:text-sm p-3 rounded-[12px] outline-none" />
                           <input type="text" value={line.text} onChange={(e) => updateLine(idx, 'text', e.target.value)} className="flex-1 bg-[#1D1B20] text-[#E6E0E9] text-sm sm:text-base p-3 rounded-[12px] border border-transparent focus:border-[#49454F] outline-none" />
-                          <button onClick={() => deleteLine(idx)} className="p-2 text-[#FFB4AB]"><span className="material-symbols-rounded">delete</span></button>
+                          <button onClick={() => deleteLine(idx)} className="p-2 text-error"><span className="material-symbols-rounded">delete</span></button>
                       </div>
                   ))}
               </div>
@@ -201,40 +210,40 @@ const LyricsOverlay: React.FC<LyricsOverlayProps> = ({
            <div className="w-full max-w-2xl mx-auto h-full overflow-y-auto p-4 sm:p-6 flex flex-col items-center">
              <div className="w-full mt-2 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-[#E6E0E9] font-medium">Import JSON</h3>
+                    <h3 className="text-[#E6E0E9] font-medium">{t('importJson')}</h3>
                     <div className="flex gap-2">
                         {apiKey && (
-                            <button onClick={handleFetchFromDescription} disabled={isFetching} className="px-3 py-1 bg-[#381E72] text-[#D0BCFF] rounded-full text-xs font-medium">
-                                {isFetching ? 'Fetching...' : 'Fetch Description'}
+                            <button onClick={handleFetchFromDescription} disabled={isFetching} className="px-3 py-1 bg-primary-container text-primary rounded-full text-xs font-medium">
+                                {isFetching ? t('fetching') : t('fetchFromDesc')}
                             </button>
                         )}
                         <div className="flex bg-[#2B2930] rounded-full p-0.5">
-                            <button onClick={() => setImportTab('PASTE')} className={`px-4 py-1 rounded-full text-xs font-medium ${importTab === 'PASTE' ? 'bg-[#49454F] text-white' : 'text-[#CAC4D0]'}`}>Paste</button>
-                            <button onClick={() => setImportTab('FILE')} className={`px-4 py-1 rounded-full text-xs font-medium ${importTab === 'FILE' ? 'bg-[#49454F] text-white' : 'text-[#CAC4D0]'}`}>File</button>
+                            <button onClick={() => setImportTab('PASTE')} className={`px-4 py-1 rounded-full text-xs font-medium ${importTab === 'PASTE' ? 'bg-[#49454F] text-white' : 'text-[#CAC4D0]'}`}>{t('paste')}</button>
+                            <button onClick={() => setImportTab('FILE')} className={`px-4 py-1 rounded-full text-xs font-medium ${importTab === 'FILE' ? 'bg-[#49454F] text-white' : 'text-[#CAC4D0]'}`}>{t('file')}</button>
                         </div>
                     </div>
                 </div>
 
                 {importTab === 'PASTE' ? (
                     <div className="flex-1 flex flex-col gap-3 min-h-[200px]">
-                        <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder="Paste JSON here..." className="flex-1 w-full bg-[#1D1B20] border border-[#49454F] rounded-[16px] p-4 text-sm text-[#E6E0E9] font-mono outline-none focus:border-[#D0BCFF] resize-none" />
+                        <textarea value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder={t('pasteJson')} className="flex-1 w-full bg-[#1D1B20] border border-[#49454F] rounded-[16px] p-4 text-sm text-[#E6E0E9] font-mono outline-none focus:border-primary resize-none" />
                         <button onClick={() => {
                                 try {
                                     const sanitized = textInput.replace(/[\u201C\u201D]/g, '"').replace(/,(\s*[\]}])/g, '$1');
                                     const parsed = JSON.parse(sanitized);
                                     if(Array.isArray(parsed)) { setEditedLyrics(parsed); setMode('EDIT'); }
-                                } catch(e) { setError("Invalid JSON."); }
-                            }} className="px-6 py-3 rounded-[12px] bg-[#D0BCFF] text-[#381E72] font-medium">Process JSON</button>
+                                } catch(e) { setError(t('invalidJson')); }
+                            }} className="px-6 py-3 rounded-[12px] bg-primary text-on-primary font-medium">{t('processJson')}</button>
                     </div>
                 ) : (
                     <label className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-[#49454F] rounded-[16px] cursor-pointer min-h-[200px]">
                         <input type="file" accept=".json" onChange={(e) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => { setTextInput(ev.target?.result as string); setImportTab('PASTE'); }; r.readAsText(f); } }} className="hidden" />
                         <span className="material-symbols-rounded text-3xl text-[#CAC4D0] mb-2">upload_file</span>
-                        <p className="text-sm text-[#E6E0E9]">Upload JSON</p>
+                        <p className="text-sm text-[#E6E0E9]">{t('uploadJson')}</p>
                     </label>
                 )}
              </div>
-             {error && <div className="mt-4 w-full p-3 bg-[#601410] rounded-lg text-[#FFB4AB] text-sm text-center">{error}</div>}
+             {error && <div className="mt-4 w-full p-3 bg-error rounded-lg text-error text-sm text-center">{error}</div>}
            </div>
         )}
       </div>

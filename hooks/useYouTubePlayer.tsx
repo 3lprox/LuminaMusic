@@ -1,5 +1,7 @@
+
+
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { AudioQuality } from '../types';
+import { AudioQuality } from '../types'; // CORRECTED: Path to types.ts
 
 interface UseYouTubePlayerProps {
   onStateChange: (state: number) => void;

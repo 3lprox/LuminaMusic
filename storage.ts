@@ -1,18 +1,10 @@
 
-import { Song, RepeatMode, User, AudioQuality, Language } from './types';
+import { Song, RepeatMode, AudioQuality, Language, PersistedState } from './types';
 
-const STORAGE_KEY = 'lumina_music_state_v1';
-const API_KEY_STORAGE_KEY = 'lumina_youtube_api_key'; // Changed key name for clarity
+const API_KEY_STORAGE_KEY = 'lumina_youtube_api_key';
+const DISCORD_AUTH_STORAGE_KEY_PREFIX = 'lumina_discord_auth_';
 
-interface PersistedState {
-  queue: Song[];
-  volume: number;
-  repeatMode: RepeatMode;
-  audioQuality: AudioQuality;
-  language: Language;
-}
-
-// Simplified user storage to just save/load API key
+// --- API Key Persistence ---
 export const saveApiKey = (apiKey: string | undefined) => {
   if (apiKey) {
     localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
@@ -25,27 +17,98 @@ export const loadApiKey = (): string | undefined => {
   return localStorage.getItem(API_KEY_STORAGE_KEY) || undefined;
 };
 
+// --- Discord Auth Persistence (User-Specific) ---
+export const saveDiscordAuth = (userId: string, username: string, accessToken: string, clientId: string) => {
+  const authData = { userId, username, accessToken, clientId };
+  localStorage.setItem(`${DISCORD_AUTH_STORAGE_KEY_PREFIX}${userId}`, JSON.stringify(authData));
+};
 
-export const saveState = (queue: Song[], volume: number, repeatMode: RepeatMode, audioQuality: AudioQuality, language: Language) => {
+export const loadDiscordAuth = (userId: string): { userId: string; username: string; accessToken: string; clientId: string } | null => {
+  const raw = localStorage.getItem(`${DISCORD_AUTH_STORAGE_KEY_PREFIX}${userId}`);
+  if (!raw) return null;
+  return JSON.parse(raw);
+};
+
+export const removeDiscordAuth = (userId: string) => {
+  localStorage.removeItem(`${DISCORD_AUTH_STORAGE_KEY_PREFIX}${userId}`);
+};
+
+// --- Main App State Persistence (User-Specific) ---
+const getStorageKey = (discordUserId?: string) => {
+  return discordUserId ? `lumina_music_state_v1_${discordUserId}` : 'lumina_music_state_v1_guest';
+};
+
+export const saveState = (
+  queue: Song[], 
+  volume: number, 
+  repeatMode: RepeatMode, 
+  audioQuality: AudioQuality, 
+  language: Language,
+  primaryColor: string, // New
+  discordClientId: string, // New
+  discordAccessToken: string | undefined, // New
+  discordUserId: string | undefined, // New
+  discordUsername: string | undefined, // New
+  customJs?: string,
+  customCss?: string,
+  discordWebhook?: string,
+  customEndpoint?: string,
+  forceHttps?: boolean,
+  showStats?: boolean
+) => {
   try {
     const data: PersistedState = {
       queue: queue,
       volume,
       repeatMode,
       audioQuality,
-      language
+      language,
+      primaryColor, // New
+      discordClientId, // New
+      discordAccessToken, // New
+      discordUserId, // New
+      discordUsername, // New
+      customJs,
+      customCss,
+      discordWebhook,
+      customEndpoint,
+      forceHttps,
+      showStats
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(getStorageKey(discordUserId), JSON.stringify(data));
   } catch (e) {
     console.error("Failed to save state", e);
   }
 };
 
-export const loadState = (): Partial<PersistedState> => {
+export const loadState = (discordUserId?: string): Partial<PersistedState> => {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey(discordUserId));
     if (!raw) return {};
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+
+    // Ensure all new fields are present even if loading an old state from localStorage
+    return {
+        ...parsed,
+        queue: parsed.queue || [],
+        volume: parsed.volume !== undefined ? parsed.volume : 100,
+        repeatMode: parsed.repeatMode || RepeatMode.NONE,
+        audioQuality: parsed.audioQuality || 'NORMAL',
+        language: parsed.language || 'EN',
+        primaryColor: parsed.primaryColor || '#D0BCFF', // Default primary color
+
+        discordClientId: parsed.discordClientId || undefined,
+        discordAccessToken: parsed.discordAccessToken || undefined,
+        discordUserId: parsed.discordUserId || undefined,
+        discordUsername: parsed.discordUsername || undefined,
+
+        customJs: parsed.customJs || '',
+        customCss: parsed.customCss || '',
+        discordWebhook: parsed.discordWebhook || '',
+        customEndpoint: parsed.customEndpoint || '',
+        forceHttps: parsed.forceHttps !== undefined ? parsed.forceHttps : true,
+        showStats: parsed.showStats !== undefined ? parsed.showStats : false,
+    };
   } catch (e) {
     console.error("Failed to load state", e);
     return {};

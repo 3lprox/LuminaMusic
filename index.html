@@ -18,6 +18,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
     <style>
+      :root {
+        /* Default Primary Color Variables - Overridden by App.tsx */
+        --color-primary: #D0BCFF; /* MD3 Primary */
+        --color-primary-dark: #381E72; /* MD3 Primary Container */
+        --color-on-primary: #381E72;
+        --color-on-primary-container: #E8DEF8;
+        --color-error: #FFB4AB;
+        --color-on-error-container: #601410;
+        --color-primary-rgb: 208, 188, 255; /* Default RGB for alpha blends */
+        --color-error-rgb: 255, 180, 171; /* Default RGB for alpha blends */
+      }
       html, body, #root {
         height: 100%;
         margin: 0;
@@ -47,6 +58,21 @@
       .material-symbols-rounded {
         font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       }
+      /* Tailwind classes using custom properties */
+      .bg-primary { background-color: var(--color-primary); }
+      .text-primary { color: var(--color-primary); }
+      .border-primary { border-color: var(--color-primary); }
+      .focus\:border-primary:focus { border-color: var(--color-primary); }
+      .hover\:text-primary:hover { color: var(--color-primary); }
+      .bg-primary-container { background-color: var(--color-primary-dark); }
+      .text-on-primary-container { color: var(--color-on-primary-container); }
+      .text-on-primary { color: var(--color-on-primary); }
+      .hover\:bg-primary\/10:hover { background-color: rgba(var(--color-primary-rgb), 0.1); }
+      .bg-primary\/10 { background-color: rgba(var(--color-primary-rgb), 0.1); }
+      .bg-error { background-color: var(--color-on-error-container); }
+      .text-error { color: var(--color-error); }
+      .hover\:text-error:hover { color: var(--color-error); }
+      .hover\:bg-error\/10:hover { background-color: rgba(var(--color-error-rgb), 0.1); }
     </style>
   <script type="importmap">
 {
@@ -61,8 +87,6 @@
   }
 }
 </script>
-<!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
   <body>
     <div id="root"></div>

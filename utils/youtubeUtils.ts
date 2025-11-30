@@ -1,5 +1,6 @@
 
-import { LyricLine } from '../types';
+
+import { LyricLine, Song } from '../types'; // CORRECTED: Path to types.ts
 
 export const extractVideoId = (url: string): string | null => {
   if (!url) return null;

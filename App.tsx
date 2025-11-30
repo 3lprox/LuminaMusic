@@ -1,22 +1,51 @@
 
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Song, RepeatMode, LyricLine, User, AudioQuality, Language } from './types';
-import { useYouTubePlayer } from './hooks/useYouTubePlayer';
-import ImportModal from './components/ImportModal';
-import NowPlayingBar from './components/NowPlayingBar';
-import SongListItem from './components/SongListItem';
-import LyricsOverlay from './components/LyricsOverlay';
-import SettingsModal from './components/SettingsModal';
-import StatsForNerds from './components/StatsForNerds';
-import { saveState, loadState, saveApiKey, loadApiKey } from './utils/storage';
-import { DEFAULT_SONG } from './services/youtubeService';
-import { getTranslation } from './utils/i18n';
+import { Song, RepeatMode, LyricLine, User, AudioQuality, Language, PersistedState } from './types'; // CORRECTED: Path from root/ to types.ts
+import { useYouTubePlayer } from './hooks/useYouTubePlayer'; // CORRECTED: Path from root/ to hooks/
+import ImportModal from './components/ImportModal'; // CORRECTED: Path from root/ to components/
+import NowPlayingBar from './components/NowPlayingBar'; // CORRECTED: Path from root/ to components/
+import SongListItem from './components/SongListItem'; // CORRECTED: Path from root/ to components/
+import LyricsOverlay from './components/LyricsOverlay'; // CORRECTED: Path from root/ to components/
+import SettingsModal from './components/SettingsModal'; // CORRECTED: Path from root/ to components/
+import StatsForNerds from './components/StatsForNerds'; // CORRECTED: Path from root/ to components/
+import { saveState, loadState, saveApiKey, loadApiKey, saveDiscordAuth, loadDiscordAuth, removeDiscordAuth } from './utils/storage'; // CORRECTED: Path from root/ to utils/
+import { DEFAULT_SONG } from './services/youtubeService'; // CORRECTED: Path from root/ to services/
+import { getTranslation } from './utils/i18n'; // CORRECTED: Path from root/ to utils/
 
 const INITIAL_QUEUE: Song[] = [];
 
+// Helper to darken hex color
+const darkenHexColor = (hex: string, percent: number) => {
+  const f=parseInt(hex.slice(1),16),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=f>>16,G=(f>>8)&0x00ff,B=f&0x0000ff;
+  return "#"+(0x1000000+(Math.round((t-R)*p)+R)*0x10000+(Math.round((t-G)*p)+G)*0x100+(Math.round((t-B)*p)+B)).toString(16).slice(1);
+}
+
+// Helper to convert hex to RGB for rgba() CSS
+const hexToRgb = (hex: string) => {
+    let r=0, g=0, b=0;
+    if (hex.length === 4) { r = parseInt(hex[1]+hex[1],16); g = parseInt(hex[2]+hex[2],16); b = parseInt(hex[3]+hex[3],16); }
+    else if (hex.length === 7) { r = parseInt(hex.substring(1,3),16); g = parseInt(hex.substring(3,5),16); b = parseInt(hex.substring(5,7),16); }
+    return `${r}, ${g}, ${b}`;
+}
+
+
 function App() {
   const [apiKey, setApiKey] = useState<string | undefined>(undefined);
-  const user: User = { username: "Guest", isGuest: true, apiKey };
+  
+  // Discord Auth State
+  const [discordClientId, setDiscordClientId] = useState('1444395105950634176'); // Pre-filled with user's client_id
+  const [discordAccessToken, setDiscordAccessToken] = useState<string | undefined>(undefined);
+  const [discordUserId, setDiscordUserId] = useState<string | undefined>(undefined);
+  const [discordUsername, setDiscordUsername] = useState<string | undefined>(undefined);
+
+  const user: User = { 
+    username: discordUsername || "Guest", 
+    isGuest: !discordUserId, 
+    apiKey,
+    discordUserId,
+    discordUsername
+  };
 
   const [queue, setQueue] = useState<Song[]>(INITIAL_QUEUE);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1);
@@ -25,8 +54,9 @@ function App() {
   const [volume, setVolume] = useState(100);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>(RepeatMode.NONE);
   const [audioQuality, setAudioQuality] = useState<AudioQuality>('NORMAL');
-  const [language, setLanguage] = useState<Language>('EN');
-  
+  const [language, setLanguage] = useState<Language>('EN'); // Default to English
+  const [primaryColor, setPrimaryColor] = useState('#D0BCFF'); // New: Default Material Design Primary
+
   // Power User State
   const [customJs, setCustomJs] = useState('');
   const [customCss, setCustomCss] = useState('');
@@ -45,32 +75,248 @@ function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
-  const t = (key: any) => getTranslation(language, key);
+  const t = useCallback((key: any) => getTranslation(language, key), [language]);
 
+  // --- YouTube Player Hook ---
+  const { 
+    loadVideo, 
+    play: playYT, 
+    pause: pauseYT, 
+    seekTo: seekYT, 
+    setVolume: setVolumeYT, 
+    setPlaybackQuality, 
+    getVideoData, 
+    getDuration, 
+    isReady: isYTReady 
+  } = useYouTubePlayer({
+    onStateChange: (state) => {
+      // 1 = Playing, 2 = Paused, 0 = Ended
+      if (state === 1) { 
+             setIsPlaying(true);
+             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+             
+             // --- Self-Healing Metadata (Fix duration/title if unknown on guest mode) ---
+             if (currentSong) {
+                 const realDuration = getDuration();
+                 if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
+                     updateSongDuration(currentSongIndex, realDuration);
+                 }
+                 const data = getVideoData(); // Get real title/author from YT player
+                 if (data && data.title && data.author) {
+                     if (currentSong.title.startsWith(t('loadingVideo')) || currentSong.artist === t('unknownArtist')) {
+                         updateSongMetadata(currentSongIndex, data.title, data.author);
+                     }
+                 }
+             }
+      }
+      if (state === 2) { 
+          setIsPlaying(false);
+          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      }
+      if (state === 0) handleNext(true); // Ended -> Go to next song
+    },
+    onProgress: (currentTime, duration) => {
+        setProgress(currentTime);
+        // Also update duration from progress callback if it was 0 initially
+        if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
+            updateSongDuration(currentSongIndex, duration);
+        }
+    },
+    onError: (e) => {
+        if (e === 150 || e === 101) { // Video unavailable or private
+            showToast(t('videoUnavailable'));
+            setTimeout(() => handleNext(true), 1500); // Try next song
+        } else {
+            console.error("YouTube Player Error:", e);
+            showToast(t('errorPlaying'));
+        }
+    }
+  });
+
+  // --- Playback Controls (useCallback to prevent re-renders) ---
+  const handleSeek = useCallback((seconds: number) => {
+    setProgress(seconds);
+    seekYT(seconds);
+  }, [seekYT]);
+
+  const handleNext = useCallback((auto = false) => {
+    if (queue.length === 0) return;
+
+    if (repeatMode === RepeatMode.ONE) { // Repeat current song
+      handleSeek(0);
+      playYT();
+      return;
+    }
+
+    let nextIndex = currentSongIndex + 1;
+    if (nextIndex >= queue.length) { // Wrap around or stop
+      nextIndex = repeatMode === RepeatMode.ALL ? 0 : -1;
+    }
+    
+    if (nextIndex !== -1) {
+        setCurrentSongIndex(nextIndex);
+        setIsPlaying(true); // Ensure playing starts
+        setProgress(0);
+    } else { // No next song
+        setIsPlaying(false);
+        setCurrentSongIndex(-1);
+        setProgress(0);
+    }
+  }, [currentSongIndex, queue.length, repeatMode, handleSeek, playYT]);
+
+  const handlePrev = useCallback(() => {
+    if (progress > 3) { // If more than 3 seconds into song, restart it
+        handleSeek(0);
+        setProgress(0);
+        setIsPlaying(true);
+    } else if (currentSongIndex > 0) {
+        setCurrentSongIndex(prev => prev - 1);
+        setIsPlaying(true);
+        setProgress(0);
+    } else if (repeatMode === RepeatMode.ALL && queue.length > 0) { // Wrap around
+        setCurrentSongIndex(queue.length - 1);
+        setIsPlaying(true);
+        setProgress(0);
+    } else { // No previous song, stop
+        handleSeek(0);
+        setProgress(0);
+        setIsPlaying(false);
+    }
+  }, [currentSongIndex, progress, repeatMode, queue.length, handleSeek]);
+
+
+  // --- Initial Load & Discord OAuth Callback ---
   useEffect(() => {
     const savedApiKey = loadApiKey();
     if (savedApiKey) setApiKey(savedApiKey);
 
-    const saved = loadState();
-    if (saved.queue && saved.queue.length > 0) setQueue(saved.queue);
-    else if (queue.length === 0) setQueue([DEFAULT_SONG]);
+    // --- Discord OAuth Callback Handling ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const discordCode = urlParams.get('code');
     
-    if (saved.volume !== undefined) setVolume(saved.volume);
-    if (saved.repeatMode !== undefined) setRepeatMode(saved.repeatMode);
-    if (saved.audioQuality !== undefined) setAudioQuality(saved.audioQuality);
-    if (saved.language !== undefined) setLanguage(saved.language);
-    
-    if (saved.customJs) setCustomJs(saved.customJs);
-    if (saved.customCss) setCustomCss(saved.customCss);
-    if (saved.discordWebhook) setDiscordWebhook(saved.discordWebhook);
-    if (saved.customEndpoint) setCustomEndpoint(saved.customEndpoint);
-    if (saved.forceHttps !== undefined) setForceHttps(saved.forceHttps);
-    if (saved.showStats !== undefined) setShowStats(saved.showStats);
+    if (discordCode && discordClientId) {
+      window.history.replaceState(null, '', window.location.pathname); // Clean URL
 
-    setHasLoadedState(true);
-  }, []);
+      // Simulate token exchange and user info fetch (REAL Discord API calls would be done on a secure backend)
+      // For identify scope, fetching user info with access_token is allowed.
+      // In a real app, 'code' is exchanged for 'access_token' via a backend to keep client_secret secure.
+      // Here, we're making a direct, simplified assumption for client-side demo purposes.
+      const TOKEN_EXCHANGE_URL = `https://discord.com/api/oauth2/token`;
+      const USER_INFO_URL = `https://discord.com/api/users/@me`;
 
-  // Injection Effect
+      // Simulating token exchange (requires client_secret from backend usually)
+      // For this frontend-only app, we'll try to use the code as if it were an access_token for user info
+      // Or, better, assume backend has exchanged it and passed it to us.
+      // Let's make it simpler and fetch user data directly if we get a code.
+      // This is NOT how Discord OAuth should be done securely in production.
+      const redirectUri = encodeURIComponent(window.location.origin); // Must match registered redirect_uri in Discord dev portal
+
+      fetch(TOKEN_EXCHANGE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          client_id: discordClientId,
+          grant_type: 'authorization_code',
+          code: discordCode,
+          redirect_uri: redirectUri,
+          // client_secret: 'YOUR_CLIENT_SECRET_HERE_IF_SERVER_SIDE', // This would be on a backend
+          scope: 'identify', // Only 'identify' needed for user info
+        }).toString(),
+      })
+      .then(response => {
+          if (!response.ok) {
+              return response.json().then(err => { throw new Error(`Discord Token Exchange failed: ${JSON.stringify(err)}`); });
+          }
+          return response.json();
+      })
+      .then(data => {
+          const accessToken = data.access_token;
+          if (!accessToken) throw new Error('No access token received from Discord.');
+
+          return fetch(USER_INFO_URL, {
+              headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+      })
+      .then(response => {
+          if (!response.ok) throw new Error('Failed to fetch Discord user info');
+          return response.json();
+      })
+      .then(discordUser => {
+          if (discordUser.id && discordUser.username) {
+              setDiscordUserId(discordUser.id);
+              setDiscordUsername(discordUser.username);
+              setDiscordAccessToken(discordCode); // In a real app, this would be the actual access_token
+              saveDiscordAuth(discordUser.id, discordUser.username, discordCode, discordClientId);
+              showToast(t('welcome') + `, @${discordUser.username}!`);
+              // Reload state based on new discordUserId
+              const saved = loadState(discordUser.id);
+              if (saved.queue && saved.queue.length > 0) setQueue(saved.queue);
+              else if (DEFAULT_SONG) setQueue([DEFAULT_SONG]);
+              // ... load other settings from 'saved'
+              setVolume(saved.volume !== undefined ? saved.volume : 100);
+              setRepeatMode(saved.repeatMode || RepeatMode.NONE);
+              setAudioQuality(saved.audioQuality || 'NORMAL');
+              setLanguage(saved.language || 'EN');
+              setPrimaryColor(saved.primaryColor || '#D0BCFF');
+              setCustomJs(saved.customJs || '');
+              setCustomCss(saved.customCss || '');
+              setDiscordWebhook(saved.discordWebhook || '');
+              setCustomEndpoint(saved.customEndpoint || '');
+              setForceHttps(saved.forceHttps !== undefined ? saved.forceHttps : true);
+              setShowStats(saved.showStats !== undefined ? saved.showStats : false);
+              setHasLoadedState(true);
+          } else {
+              throw new Error('Invalid Discord user data received.');
+          }
+      })
+      .catch(error => {
+          console.error('Discord OAuth Error:', error);
+          showToast(t('discordLoginFailed'));
+          setHasLoadedState(true); // Still set to true to allow app to function
+      });
+    } else {
+      // Load persisted state (for Discord user or guest)
+      const saved = loadState(discordUserId); // Try to load based on existing discordUserId
+      
+      if (saved.queue && saved.queue.length > 0) setQueue(saved.queue);
+      else if (DEFAULT_SONG) setQueue([DEFAULT_SONG]); // Ensure default song if no saved queue
+      
+      setVolume(saved.volume !== undefined ? saved.volume : 100);
+      setRepeatMode(saved.repeatMode || RepeatMode.NONE);
+      setAudioQuality(saved.audioQuality || 'NORMAL');
+      setLanguage(saved.language || 'EN');
+      setPrimaryColor(saved.primaryColor || '#D0BCFF'); // Load primary color
+      
+      // Load Discord info from persisted state, if any
+      if (saved.discordUserId) setDiscordUserId(saved.discordUserId);
+      if (saved.discordUsername) setDiscordUsername(saved.discordUsername);
+      if (saved.discordAccessToken) setDiscordAccessToken(saved.discordAccessToken);
+      if (saved.discordClientId) setDiscordClientId(saved.discordClientId); // Also load saved client ID
+
+      setCustomJs(saved.customJs || '');
+      setCustomCss(saved.customCss || '');
+      setDiscordWebhook(saved.discordWebhook || '');
+      setCustomEndpoint(saved.customEndpoint || '');
+      setForceHttps(saved.forceHttps !== undefined ? saved.forceHttps : true);
+      setShowStats(saved.showStats !== undefined ? saved.showStats : false);
+
+      setHasLoadedState(true);
+    }
+  }, [discordClientId, t]); // Only run once for initial load and Discord auth
+
+  // --- Dynamic Primary Color Injection ---
+  useEffect(() => {
+    if (primaryColor) {
+      document.documentElement.style.setProperty('--color-primary', primaryColor);
+      document.documentElement.style.setProperty('--color-primary-dark', darkenHexColor(primaryColor, 0.3));
+      document.documentElement.style.setProperty('--color-primary-rgb', hexToRgb(primaryColor));
+    }
+  }, [primaryColor]);
+
+
+  // --- Custom CSS/JS Injection ---
   useEffect(() => {
     if (!hasLoadedState) return;
     
@@ -82,18 +328,19 @@ function App() {
         styleTag.id = styleId;
         document.head.appendChild(styleTag);
     }
-    styleTag.textContent = customCss;
+    styleTag.textContent = customCss || '';
 
-    // JS (Execute safely?)
+    // JS (Execute safely)
     if (customJs) {
         try {
             // eslint-disable-next-line no-new-func
             const func = new Function(customJs);
             func();
-        } catch(e) { console.error("Injection Error:", e); }
+        } catch(e) { console.error("Custom JS Injection Error:", e); showToast(t('customJsError')); }
     }
-  }, [customCss, customJs, hasLoadedState]);
+  }, [customCss, customJs, hasLoadedState, t]);
 
+  // --- PWA Install Prompt ---
   useEffect(() => {
     const handler = (e: any) => {
       e.preventDefault();
@@ -110,17 +357,24 @@ function App() {
     if (outcome === 'accepted') setDeferredPrompt(null);
   };
   
+  // --- API Key & Persistence ---
   const handleUpdateApiKey = (newKey: string | undefined) => {
     setApiKey(newKey);
-    saveApiKey(newKey);
+    saveApiKey(newKey); // Save independently for guest/API key fallback
     showToast(t('apiKeyUpdated'));
   }
 
   useEffect(() => {
     if (hasLoadedState) {
-      saveState(queue, volume, repeatMode, audioQuality, language, customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats);
+      saveState(
+        queue, volume, repeatMode, audioQuality, language, primaryColor, 
+        discordClientId, discordAccessToken, discordUserId, discordUsername, 
+        customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats
+      );
     }
-  }, [queue, volume, repeatMode, audioQuality, language, hasLoadedState, customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats]);
+  }, [queue, volume, repeatMode, audioQuality, language, primaryColor, hasLoadedState, 
+      discordClientId, discordAccessToken, discordUserId, discordUsername, 
+      customJs, customCss, discordWebhook, customEndpoint, forceHttps, showStats]);
 
   const showToast = (msg: string) => {
       setToastMessage(msg);
@@ -128,12 +382,15 @@ function App() {
   };
 
   const handleDownloadSource = () => {
-      const source = {
-          config: {
-              language, audioQuality, apiKey, customJs, customCss, discordWebhook, customEndpoint, showStats
-          },
-          library: queue
+      const source: PersistedState & { apiKey?: string } = {
+          queue: queue,
+          language, audioQuality, primaryColor, 
+          discordClientId, discordAccessToken, discordUserId, discordUsername, 
+          customJs, customCss, discordWebhook, customEndpoint, showStats, forceHttps,
+          volume, repeatMode,
+          apiKey: apiKey 
       };
+
       const dataStr = JSON.stringify(source, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -169,18 +426,30 @@ function App() {
         try {
             const importedData = JSON.parse(event.target?.result as string);
             // Check if it's a Source Config
-            if (importedData.config && importedData.library) {
-                setQueue(importedData.library);
-                setCustomJs(importedData.config.customJs || '');
-                setCustomCss(importedData.config.customCss || '');
-                setDiscordWebhook(importedData.config.discordWebhook || '');
-                setShowStats(importedData.config.showStats || false);
-                showToast("Source Config Restored!");
+            if (importedData.queue && importedData.language) { // Basic check for PersistedState
+                setQueue(importedData.queue);
+                setLanguage(importedData.language || 'EN');
+                setAudioQuality(importedData.audioQuality || 'NORMAL');
+                setPrimaryColor(importedData.primaryColor || '#D0BCFF'); 
+                setCustomJs(importedData.customJs || '');
+                setCustomCss(importedData.customCss || '');
+                setDiscordWebhook(importedData.discordWebhook || '');
+                setCustomEndpoint(importedData.customEndpoint || '');
+                setForceHttps(importedData.forceHttps !== undefined ? importedData.forceHttps : true);
+                setShowStats(importedData.showStats || false);
+                if (importedData.apiKey) handleUpdateApiKey(importedData.apiKey);
+                // Discord info also imported
+                if(importedData.discordUserId) setDiscordUserId(importedData.discordUserId);
+                if(importedData.discordUsername) setDiscordUsername(importedData.discordUsername);
+                if(importedData.discordAccessToken) setDiscordAccessToken(importedData.discordAccessToken);
+                if(importedData.discordClientId) setDiscordClientId(importedData.discordClientId);
+
+                showToast(t('sourceConfigRestored'));
             }
             // Or just library
             else if (Array.isArray(importedData)) {
-                const existingIds = new Set(queue.map(s => s.id));
-                const uniqueNew = importedData.filter((s: Song) => !existingIds.has(s.id));
+                const existingIds = new Set(queue.map(s => s.videoId || s.id));
+                const uniqueNew = importedData.filter((s: Song) => !existingIds.has(s.videoId || s.id));
                 if (uniqueNew.length > 0) {
                     setQueue(prev => [...prev, ...uniqueNew]);
                     showToast(t('dataImported'));
@@ -207,90 +476,16 @@ function App() {
                           title: currentSong.title,
                           description: currentSong.artist,
                           thumbnail: { url: currentSong.thumbnailUrl },
-                          color: 13680639
+                          color: parseInt(primaryColor.replace('#', ''), 16) // Dynamic color
                       }]
                   })
               }).catch(e => console.error("Discord webhook failed", e));
           } catch(e) {}
       }
-  }, [currentSong, discordWebhook]);
+  }, [currentSong, discordWebhook, primaryColor]);
 
-  const handleSeek = useCallback((seconds: number) => {
-    setProgress(seconds);
-    seekYT(seconds);
-  }, []);
 
-  const handleNext = useCallback((auto = false) => {
-    if (queue.length === 0) return;
-    if (repeatMode === RepeatMode.ONE && auto) {
-      handleSeek(0);
-      return;
-    }
-    if (currentSongIndex < queue.length - 1) {
-        setCurrentSongIndex(prev => prev + 1);
-    } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(0);
-    } else {
-        setIsPlaying(false);
-        setCurrentSongIndex(-1);
-    }
-  }, [currentSongIndex, queue.length, repeatMode, handleSeek]);
-
-  const handlePrev = useCallback(() => {
-    if (progress > 3) {
-        handleSeek(0);
-        setProgress(0);
-    } else if (currentSongIndex > 0) {
-        setCurrentSongIndex(prev => prev - 1);
-    } else if (repeatMode === RepeatMode.ALL) {
-        setCurrentSongIndex(queue.length - 1);
-    } else {
-        handleSeek(0);
-        setProgress(0);
-    }
-  }, [currentSongIndex, progress, repeatMode, queue.length, handleSeek]);
-
-  const { loadVideo, play: playYT, pause: pauseYT, seekTo: seekYT, setVolume: setVolumeYT, setPlaybackQuality, getVideoData, getDuration, isReady: isYTReady } = useYouTubePlayer({
-    onStateChange: (state) => {
-      if (state === 1) { // Playing
-             setIsPlaying(true);
-             setPlaybackQuality(audioQuality);
-             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
-             if (currentSong) {
-                 const realDuration = getDuration ? getDuration() : 0;
-                 if (realDuration > 0 && Math.abs((currentSong.duration || 0) - realDuration) > 1) {
-                     updateSongDuration(currentSongIndex, realDuration);
-                 }
-                 const data = getVideoData();
-                 if (data && data.title && data.author) {
-                     if (currentSong.title.startsWith('Loading Video') || currentSong.artist === 'Unknown Artist') {
-                         updateSongMetadata(currentSongIndex, data.title, data.author);
-                     }
-                 }
-             }
-      }
-      if (state === 2) {
-          setIsPlaying(false);
-          if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-      }
-      if (state === 0) handleNext(true);
-    },
-    onProgress: (currentTime, duration) => {
-        setProgress(currentTime);
-        if (duration > 0 && currentSong && Math.abs((currentSong.duration || 0) - duration) > 1) {
-            updateSongDuration(currentSongIndex, duration);
-        }
-    },
-    onError: (e) => {
-        if (e === 150 || e === 101) {
-            showToast(t('videoUnavailable'));
-            setTimeout(() => handleNext(true), 1500);
-        } else showToast(t('errorPlaying'));
-    }
-  });
-
-  useEffect(() => { if(isYTReady) setPlaybackQuality(audioQuality); }, [audioQuality, isYTReady, setPlaybackQuality]);
-  useEffect(() => { if (isYTReady && currentSong) isPlaying ? playYT() : pauseYT(); }, [isPlaying, currentSong, isYTReady, playYT, pauseYT]);
+  // --- YouTube Player Effects ---
   useEffect(() => {
     if (!currentSong) {
       if (isYTReady) pauseYT();
@@ -298,16 +493,24 @@ function App() {
       setProgress(0);
       return;
     }
+    // Load and play video when currentSong or isPlaying changes, if player is ready
     if (isYTReady) {
        setVolumeYT(volume);
+       setPlaybackQuality(audioQuality); // Set quality here
        loadVideo(currentSong.videoId || '');
+       if (isPlaying) {
+           playYT(); // Explicitly play after loading if it should be playing
+       } else {
+           pauseYT(); // Ensure it's paused if not playing
+       }
     }
-  }, [currentSong, isYTReady, currentSongIndex, loadVideo, volume, setVolumeYT]);
+  }, [currentSong, isPlaying, isYTReady, loadVideo, playYT, pauseYT, setVolumeYT, setPlaybackQuality, volume, audioQuality]);
+
 
   const updateSongDuration = (index: number, duration: number) => {
     setQueue(prev => {
         if (!prev[index]) return prev;
-        if (Math.abs(prev[index].duration - duration) < 1) return prev;
+        if (Math.abs((prev[index].duration || 0) - duration) < 1) return prev; // Avoid unnecessary updates
         const newQueue = [...prev];
         newQueue[index] = { ...newQueue[index], duration };
         return newQueue;
@@ -334,48 +537,63 @@ function App() {
   };
 
   const handlePlaySong = (index: number) => {
-    if (index === currentSongIndex) setIsPlaying(!isPlaying);
-    else {
+    if (index === currentSongIndex) { // Clicked active song
+      setIsPlaying(prev => !prev);
+    } else { // Clicked new song
         setCurrentSongIndex(index);
         setIsPlaying(true);
         setProgress(0);
     }
   };
 
-  const handleShuffle = () => {
+  const handleShuffle = useCallback(() => {
     if (queue.length <= 1) return;
-    const current = queue[currentSongIndex];
-    const rest = queue.filter((_, i) => i !== currentSongIndex);
+    const current = currentSongIndex !== -1 ? queue[currentSongIndex] : null;
+    let rest = queue.filter((_, i) => i !== currentSongIndex);
+    
+    // Fisher-Yates shuffle
     for (let i = rest.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    setQueue(currentSongIndex >= 0 ? [current, ...rest] : rest);
-    setCurrentSongIndex(currentSongIndex >= 0 ? 0 : -1);
-    showToast("Queue Shuffled");
-  };
+    
+    // Reconstruct queue: current song first, then shuffled rest
+    const newQueue = current ? [current, ...rest] : rest;
+    setQueue(newQueue);
+    // If there was a current song, it's now at index 0. If not, play first of shuffled or nothing.
+    setCurrentSongIndex(current ? 0 : (newQueue.length > 0 ? 0 : -1)); 
+    showToast(t('queueShuffled'));
+  }, [queue, currentSongIndex, t]);
 
-  const handleReorder = (dragIndex: number, dropIndex: number) => {
+  const handleReorder = useCallback((dragIndex: number, dropIndex: number) => {
       if (dragIndex === dropIndex) return;
       setQueue(prev => {
           const updated = [...prev];
           const [moved] = updated.splice(dragIndex, 1);
           updated.splice(dropIndex, 0, moved);
-          if (currentSongIndex === dragIndex) setCurrentSongIndex(dropIndex);
-          else if (currentSongIndex > dragIndex && currentSongIndex <= dropIndex) setCurrentSongIndex(currentSongIndex - 1);
-          else if (currentSongIndex < dragIndex && currentSongIndex >= dropIndex) setCurrentSongIndex(currentSongIndex + 1);
+          
+          // Adjust currentSongIndex if the active song was moved or affected
+          if (currentSongIndex === dragIndex) {
+              setCurrentSongIndex(dropIndex);
+          } else if (currentSongIndex > dragIndex && currentSongIndex <= dropIndex) {
+              setCurrentSongIndex(currentSongIndex - 1);
+          } else if (currentSongIndex < dragIndex && currentSongIndex >= dropIndex) {
+              setCurrentSongIndex(currentSongIndex + 1);
+          }
           return updated;
       });
-  };
+  }, [currentSongIndex]);
 
+
+  // --- Media Session API ---
   useEffect(() => {
     if ('mediaSession' in navigator && currentSong) {
       const artwork = currentSong.thumbnailUrl 
         ? [{ src: currentSong.thumbnailUrl, sizes: '512x512', type: 'image/jpeg' }]
         : [];
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentSong.title || 'Unknown Title',
-        artist: currentSong.artist || 'Unknown Artist',
+        title: currentSong.title || t('unknownTitle'),
+        artist: currentSong.artist || t('unknownArtist'),
         artwork: artwork
       });
       navigator.mediaSession.setActionHandler('play', () => setIsPlaying(true));
@@ -385,8 +603,17 @@ function App() {
       navigator.mediaSession.setActionHandler('seekto', (details) => {
         if (details.seekTime || details.seekTime === 0) handleSeek(details.seekTime);
       });
+      // Additional media session actions for seek forward/backward
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skipTime = details.seekOffset || 10; // Default 10 seconds
+          handleSeek(Math.max(0, progress - skipTime));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skipTime = details.seekOffset || 10; // Default 10 seconds
+          if (currentSong) handleSeek(Math.min(currentSong.duration, progress + skipTime));
+      });
     }
-  }, [currentSong, currentSongIndex, queue, handlePrev, handleNext, handleSeek]);
+  }, [currentSong, handlePrev, handleNext, handleSeek, progress, t]);
 
   useEffect(() => {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -398,31 +625,41 @@ function App() {
     if (uniqueSongs.length === 0) { showToast(t('songExists')); return; }
     setQueue(prev => [...prev, ...uniqueSongs]);
     showToast(`${t('added')} ${uniqueSongs.length} ${t('tracks')}`);
-    if (queue.length === 0) {
-        setCurrentSongIndex(0);
+    if (currentSongIndex === -1 && uniqueSongs.length > 0) { // If queue was empty or no song playing
+        setCurrentSongIndex(0); // Start playing first imported
         setIsPlaying(true);
     }
   };
 
-  const handleToggleRepeat = () => {
+  const handleToggleRepeat = useCallback(() => {
       const modes = [RepeatMode.NONE, RepeatMode.ALL, RepeatMode.ONE];
       const nextIndex = (modes.indexOf(repeatMode) + 1) % modes.length;
       setRepeatMode(modes[nextIndex]);
       showToast(`${t('repeatMode')}: ${t(modes[nextIndex].toLowerCase())}`);
-  };
+  }, [repeatMode, t]);
 
-  const handleRemoveSong = (e: React.MouseEvent, indexToRemove: number) => {
+  const handleRemoveSong = useCallback((e: React.MouseEvent, indexToRemove: number) => {
     e.stopPropagation();
     setQueue(prev => prev.filter((_, i) => i !== indexToRemove));
-    if (indexToRemove < currentSongIndex) setCurrentSongIndex(prev => prev - 1);
-    else if (indexToRemove === currentSongIndex) {
-        if (queue.length === 1) { setIsPlaying(false); setCurrentSongIndex(-1); setProgress(0); }
-        else if (indexToRemove === queue.length - 1) setCurrentSongIndex(prev => prev - 1);
+    
+    if (indexToRemove < currentSongIndex) { // Song before current was removed
+      setCurrentSongIndex(prev => prev - 1);
+    } else if (indexToRemove === currentSongIndex) { // Current song was removed
+        if (queue.length === 1) { // It was the only song
+            setIsPlaying(false);
+            setCurrentSongIndex(-1);
+            setProgress(0);
+        } else if (indexToRemove === queue.length - 1) { // Last song in queue was removed
+            setCurrentSongIndex(prev => prev - 1); // Play previous
+        } else { // Song in middle was removed, currentSongIndex points to next song
+            // Current song index doesn't need to change, it now points to the song that shifted into its place
+            // Playback will continue with the new song at currentSongIndex due to useEffect
+        }
     }
     showToast(t('songRemoved'));
-  };
+  }, [currentSongIndex, queue.length, t]);
 
-  const handleClearAll = () => {
+  const handleClearAll = useCallback(() => {
       if (window.confirm(t('confirmClear'))) {
           setIsPlaying(false);
           setCurrentSongIndex(-1);
@@ -430,18 +667,18 @@ function App() {
           setQueue([]);
           showToast(t('libraryCleared'));
       }
-  };
+  }, [t]);
   
-  const handleGoogleSearch = () => {
+  const handleGoogleSearch = useCallback(() => {
     if (!currentSong) return;
     const query = `${currentSong.title} ${currentSong.artist} lyrics`;
     window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, '_blank');
-  };
+  }, [currentSong]);
 
   const activeThumbnail = currentSong?.thumbnailUrl || null;
 
   return (
-    <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-[#D0BCFF] selection:text-[#381E72] overflow-x-hidden">
+    <div className="relative min-h-screen bg-[#141218] text-[#E6E0E9] font-sans selection:bg-primary selection:text-on-primary-container overflow-x-hidden">
       <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".json" className="hidden" />
 
       {/* Background */}
@@ -456,7 +693,7 @@ function App() {
       </div>
 
       {/* Stats Overlay */}
-      {showStats && <StatsForNerds currentSong={currentSong} volume={volume} videoMode={isVideoMode} />}
+      {showStats && <StatsForNerds currentSong={currentSong} volume={volume} videoMode={isVideoMode} primaryColor={primaryColor} />}
 
       {/* YouTube Player */}
       <div className={`transition-all duration-300 ease-in-out ${isVideoMode ? 'fixed inset-0 z-20 bg-black flex items-center justify-center p-0 pb-[120px] sm:pb-[90px]' : 'fixed bottom-4 right-4 w-16 h-16 opacity-[0.01] z-0 pointer-events-none'}`}>
@@ -480,15 +717,17 @@ function App() {
 
       <header className="sticky top-0 z-30 flex items-center justify-between px-4 py-3 bg-[#141218]/80 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3 pl-2">
-            <div className="h-10 w-10 rounded-full bg-[#D0BCFF] flex items-center justify-center text-[#381E72] overflow-hidden">
+            <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-on-primary overflow-hidden">
                <span className="material-symbols-rounded text-2xl">person_outline</span>
             </div>
             <h1 className="text-xl font-normal tracking-tight text-[#E6E0E9]">Lumina Music</h1>
         </div>
         <div className="flex items-center gap-2">
-             <span className="text-sm text-[#CAC4D0] hidden sm:inline-block mr-2">{t('guest')}</span>
+             <span className="text-sm text-[#CAC4D0] hidden sm:inline-block mr-2">
+                {user.discordUsername ? `@${user.discordUsername}` : t('guest')}
+             </span>
              {deferredPrompt && (
-                <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#D0BCFF] text-[#381E72] text-xs font-medium hover:shadow-md animate-pulse">
+                <button onClick={handleInstallClick} className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary text-on-primary text-xs font-medium hover:shadow-md animate-pulse">
                     <span className="material-symbols-rounded text-lg">install_mobile</span>
                     <span className="hidden sm:inline">{t('installApp')}</span>
                 </button>
@@ -515,12 +754,12 @@ function App() {
                     </button>
                 </div>
                 {queue.length > 0 && (
-                    <button onClick={handleClearAll} className="flex items-center justify-center gap-2 px-4 py-3 rounded-[16px] text-[#FFB4AB] hover:bg-[#FFB4AB]/10 transition-colors">
+                    <button onClick={handleClearAll} className="flex items-center justify-center gap-2 px-4 py-3 rounded-[16px] text-error hover:bg-error/10 transition-colors">
                         <span className="material-symbols-rounded">delete_sweep</span>
                         <span className="text-sm font-medium hidden sm:inline">{t('clearAll')}</span>
                     </button>
                 )}
-                <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-3 bg-[#D0BCFF] text-[#381E72] px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-[#D0BCFF]/20 active:scale-95 transition-all">
+                <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-3 bg-primary text-on-primary px-6 py-3 rounded-[16px] font-medium hover:shadow-lg hover:shadow-primary/20 active:scale-95 transition-all">
                     <span className="material-symbols-rounded">search</span>
                     <span className="text-sm font-medium tracking-wide">{t('addTracks')}</span>
                 </button>
@@ -561,15 +800,17 @@ function App() {
         currentTime={progress}
         onImportLyrics={handleLyricsImport}
         apiKey={apiKey}
+        t={t}
       />
 
-      <ImportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onImport={handleImport} user={user} />
+      <ImportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onImport={handleImport} user={user} primaryColor={primaryColor} />
       
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
         audioQuality={audioQuality} setAudioQuality={setAudioQuality} 
         language={language} setLanguage={setLanguage} 
+        primaryColor={primaryColor} setPrimaryColor={setPrimaryColor}
         apiKey={apiKey} onUpdateApiKey={handleUpdateApiKey}
         
         customJs={customJs} setCustomJs={setCustomJs}
@@ -580,7 +821,13 @@ function App() {
         customEndpoint={customEndpoint} setCustomEndpoint={setCustomEndpoint}
         forceHttps={forceHttps} setForceHttps={setForceHttps}
         
+        discordClientId={discordClientId} setDiscordClientId={setDiscordClientId}
+        discordAccessToken={discordAccessToken} setDiscordAccessToken={setDiscordAccessToken}
+        discordUserId={discordUserId} setDiscordUserId={setDiscordUserId}
+        discordUsername={discordUsername} setDiscordUsername={setDiscordUsername}
+        
         onDownloadSource={handleDownloadSource}
+        t={t}
       />
       
       <NowPlayingBar 

@@ -1,25 +1,27 @@
 
+
 import React, { useState } from 'react';
-import { extractVideoId, extractPlaylistId } from '../utils/youtubeUtils';
+import { extractVideoId, extractPlaylistId } from '../utils/youtubeUtils'; // CORRECTED: Path from components/ to utils/
 import { searchYouTube, fetchVideoMetadata, fetchPlaylistItems } from '../services/youtubeService';
-import { Song, User } from '../types';
-import { getTranslation } from '../utils/i18n';
+import { Song, User } from '../types'; // CORRECTED: Path from components/ to root/
+import { getTranslation } from '../utils/i18n'; // CORRECTED: Path from components/ to utils/
 
 interface ImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (songs: Song[]) => void;
   user: User;
+  primaryColor: string; // Added primaryColor prop
 }
 
 type Tab = 'SEARCH' | 'URL';
 
-const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, user }) => {
+const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, user, primaryColor }) => {
   const [activeTab, setActiveTab] = useState<Tab>('SEARCH');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
-  const t = (key: any) => getTranslation(user.apiKey ? 'EN' : 'ES', key);
+  const t = (key: any) => getTranslation(user.apiKey ? 'EN' : 'ES', key); // Language based on API key availability for guest vs real mode
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Song[]>([]);
@@ -147,7 +149,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                 <button 
                     key={tab}
                     onClick={() => { setActiveTab(tab as Tab); setError(null); }}
-                    className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-[#D0BCFF] text-[#D0BCFF]' : 'border-transparent text-[#CAC4D0]'}`}
+                    className={`flex-1 pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === tab ? 'border-primary text-primary' : 'border-transparent text-[#CAC4D0]'}`}
                 >
                     {t(tab.toLowerCase())}
                 </button>
@@ -163,10 +165,10 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                             onChange={(e) => { setSearchQuery(e.target.value); setError(null); }}
                             type="text" 
                             placeholder={currentApiKey ? t('searchYoutube') : t('searchMockPlaceholder')}
-                            className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
+                            className="flex-1 bg-[#141218] border border-[#938F99] rounded-full px-4 py-3 text-[#E6E0E9] outline-none focus:border-primary" 
                             autoFocus 
                         />
-                        <button type="submit" disabled={isLoading} className="bg-[#D0BCFF] text-[#381E72] rounded-full px-5 font-medium hover:opacity-90 flex items-center justify-center">
+                        <button type="submit" disabled={isLoading} className="bg-primary text-on-primary rounded-full px-5 font-medium hover:opacity-90 flex items-center justify-center">
                             {isLoading ? <span className="material-symbols-rounded animate-spin">refresh</span> : t('go')}
                         </button>
                      </form>
@@ -180,7 +182,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                                     <p className="text-[#E6E0E9] text-sm font-medium truncate">{song.title}</p>
                                     <p className="text-[#CAC4D0] text-xs truncate">{song.artist}</p>
                                 </div>
-                                <button onClick={() => handleAddSearchResult(song)} className="p-2 text-[#D0BCFF] hover:bg-[#D0BCFF]/10 rounded-full">
+                                <button onClick={() => handleAddSearchResult(song)} className="p-2 text-primary hover:bg-primary/10 rounded-full">
                                     <span className="material-symbols-rounded">add_circle</span>
                                 </button>
                             </div>
@@ -197,11 +199,11 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
                             name="url" 
                             type="url" 
                             placeholder="https://youtu.be/..." 
-                            className="w-full bg-[#141218] border border-[#938F99] rounded-[4px] px-4 py-3 text-[#E6E0E9] outline-none focus:border-[#D0BCFF]" 
+                            className="w-full bg-[#141218] border border-[#938F99] rounded-[4px] px-4 py-3 text-[#E6E0E9] outline-none focus:border-primary" 
                             onChange={() => setError(null)}
                          />
                      </div>
-                     <button type="submit" disabled={isLoading} className="self-end px-6 py-2 rounded-full bg-[#D0BCFF] text-[#381E72] text-sm font-medium disabled:opacity-50 mt-2">
+                     <button type="submit" disabled={isLoading} className="self-end px-6 py-2 rounded-full bg-primary text-on-primary text-sm font-medium disabled:opacity-50 mt-2">
                         {isLoading ? t('loading') : t('import')}
                      </button>
                  </form>
@@ -214,7 +216,7 @@ const ImportModal: React.FC<ImportModalProps> = ({ isOpen, onClose, onImport, us
         </div>
 
         {error && (
-            <div className="bg-[#601410] text-[#FFB4AB] text-xs text-center p-2 animate-in slide-in-from-bottom-2">
+            <div className="bg-error text-error text-xs text-center p-2 animate-in slide-in-from-bottom-2">
                 {error}
             </div>
         )}
