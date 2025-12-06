@@ -1,6 +1,4 @@
 
-
-
 import React, { useState } from 'react';
 import { AudioQuality, Language } from '../types'; // CORRECTED: Path from components/ to root/
 import { getTranslation } from '../utils/i18n'; // CORRECTED: Path from components/ to utils/
@@ -110,20 +108,36 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setDiscordUsername(undefined);   // Clear username
   };
 
+  // Simulation handlers for Debug
+  const triggerBufferDeath = () => {
+      window.dispatchEvent(new CustomEvent('LUMINA_DEBUG_ERROR', { detail: 'BUFFER_DEATH' }));
+      onClose();
+  };
+  const triggerUiFreeze = () => {
+      // Simulate by blocking main thread briefly? No, better to just show visual indicator
+      window.dispatchEvent(new CustomEvent('LUMINA_DEBUG_ERROR', { detail: 'UI_FREEZE_SIM' }));
+      onClose();
+  };
+  const triggerNetworkFail = () => {
+      window.dispatchEvent(new CustomEvent('LUMINA_DEBUG_ERROR', { detail: 'NETWORK_FAIL' }));
+      onClose();
+  };
+
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-[28px] bg-[#2B2930] shadow-2xl elevation-3 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 h-[80vh] sm:h-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-md rounded-[28px] bg-[#2B2930] shadow-2xl elevation-3 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 max-h-[85vh]">
         
-        <div className="px-6 pt-6 pb-2 flex justify-between items-center">
-            <h2 className="text-xl text-[#E6E0E9]">{t('settings')}</h2>
+        {/* Header - Fixed */}
+        <div className="px-6 pt-5 pb-4 flex justify-between items-center bg-[#2B2930] z-10 shrink-0">
+            <h2 className="text-xl text-[#E6E0E9] font-medium">{t('settings')}</h2>
             <button onClick={onClose} className="p-2 rounded-full hover:bg-[#E6E0E9]/10 text-[#CAC4D0] hover:text-[#E6E0E9]">
                 <span className="material-symbols-rounded">close</span>
             </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex px-4 border-b border-[#49454F]">
+        {/* Tabs - Fixed */}
+        <div className="flex px-4 border-b border-[#49454F] shrink-0 bg-[#2B2930]">
             {tabs.map((tab) => (
                 <button 
                     key={tab.id}
@@ -138,7 +152,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
             
             {activeTab === 'GENERAL' && (
                 <>
@@ -154,12 +169,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {/* Theme Color */}
                     <div>
                         <h3 className="text-sm font-medium text-primary mb-3 uppercase tracking-wider">{t('themeColor')}</h3>
-                        <div className="grid grid-cols-5 gap-2">
+                        <div className="grid grid-cols-5 gap-3">
                             {predefinedColors.map((color) => (
                                 <button
                                     key={color}
                                     onClick={() => setPrimaryColor(color)}
-                                    className={`w-10 h-10 rounded-full border-2 ${primaryColor === color ? 'border-white' : 'border-transparent'}`}
+                                    className={`w-10 h-10 rounded-full shadow-sm transition-transform hover:scale-110 active:scale-95 ${primaryColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-[#2B2930]' : ''}`}
                                     style={{ backgroundColor: color }}
                                     title={color}
                                 />
@@ -207,11 +222,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {activeTab === 'DEV' && (
                 <>
-                    <div className="flex items-center justify-between">
-                         <h3 className="text-sm font-medium text-primary uppercase tracking-wider">{t('statsForNerds')}</h3>
+                    <div className="flex items-center justify-between p-3 bg-[#1D1B20] rounded-xl border border-[#49454F]">
+                         <div>
+                             <h3 className="text-sm font-medium text-primary">{t('statsForNerds')}</h3>
+                             <p className="text-[10px] text-[#CAC4D0]">Show debug overlay on player</p>
+                         </div>
                          <button onClick={() => setShowStats(!showStats)} className={`w-12 h-6 rounded-full transition-colors relative ${showStats ? 'bg-primary' : 'bg-[#49454F]'}`}>
                              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${showStats ? 'left-7 bg-on-primary' : 'left-1'}`} />
                          </button>
+                    </div>
+
+                    <div className="space-y-4">
+                         <h3 className="text-sm font-medium text-error uppercase tracking-wider flex items-center gap-2">
+                            <span className="material-symbols-rounded">bug_report</span> Chaos Monkey (Debug)
+                         </h3>
+                         <div className="grid grid-cols-2 gap-3">
+                             <button onClick={triggerBufferDeath} className="p-3 bg-error/10 text-error rounded-xl text-xs font-medium border border-error/20 hover:bg-error/20">
+                                 Simulate Buffer Death
+                             </button>
+                             <button onClick={triggerNetworkFail} className="p-3 bg-error/10 text-error rounded-xl text-xs font-medium border border-error/20 hover:bg-error/20">
+                                 Simulate Network Fail
+                             </button>
+                             <button onClick={triggerUiFreeze} className="p-3 bg-error/10 text-error rounded-xl text-xs font-medium border border-error/20 hover:bg-error/20 col-span-2">
+                                 Simulate Interface Freeze
+                             </button>
+                         </div>
                     </div>
 
                     <div>
@@ -278,8 +313,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         </div>
         
-        <div className="bg-[#1D1B20] p-4 text-center">
-             <p className="text-[10px] text-[#49454F]">Lumina Music v2.0 • Pro Edition</p>
+        {/* Footer - Fixed */}
+        <div className="bg-[#1D1B20] p-3 text-center shrink-0 border-t border-[#49454F]">
+             <p className="text-[10px] text-[#49454F]">Lumina Music v2.5 • Power User Edition</p>
         </div>
 
       </div>
